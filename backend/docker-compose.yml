@@ -3,7 +3,7 @@ services:
   postgres:
       image: pgvector/pgvector:pg16
       container_name: knowledge_hub_postgres
-      restart: always
+      restart: no
       environment:
         POSTGRES_USER: user
         POSTGRES_PASSWORD: 123456
@@ -42,7 +42,7 @@ services:
   mongodb:
     image: mongo:7-jammy
     container_name: knowledge_hub_mongodb
-    restart: always
+    restart: no
     environment:
       MONGO_INITDB_ROOT_USERNAME: mongo_user
       MONGO_INITDB_ROOT_PASSWORD: mongo_pass123
@@ -62,7 +62,7 @@ services:
   mongo-express:
     image: mongo-express:1.0.2-20-alpine3.19
     container_name: knowledge_hub_mongo_express
-    restart: always
+    restart: no
     ports:
       - "8081:8081"
     environment:
