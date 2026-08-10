@@ -8,5 +8,5 @@ db.createUser({
 
 // 文档正文：_id(ObjectId) ↔ kh_document.content_id，documentId ↔ kh_document.id
 db.createCollection("document_content");
-// db.document_content.createIndex({ documentId: 1 }, { unique: true });
-// db.document_content.createIndex({ deleted: 1 });
+db.document_content.createIndex({ documentId: 1 }, { unique: true });
+db.document_content.createIndex({ deleted: 1 });
