@@ -26,10 +26,15 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: admin
+      PUID: "5050"
+      PGID: "0"
+      PGADMIN_CONFIG_SESSION_DB_PATH: "'/tmp/pgadmin_sessions'"
+      PGADMIN_CONFIG_STORAGE_DIR: "'/tmp/pgadmin_storage'"
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/pgadmin:/var/lib/pgadmin
+    user: "0"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/login"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:80/login', timeout=5)\""]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -115,6 +120,11 @@ services:
       - ES_JAVA_OPTS=-Xms512m -Xmx512m  # JVM 内存配置，避免占用过高
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/es/data:/usr/share/elasticsearch/data
+    user: "0"
+    command:
+      - /bin/sh
+      - -c
+      - chown -R 1000:0 /usr/share/elasticsearch/data && exec su -s /bin/bash elasticsearch -c '/usr/local/bin/docker-entrypoint.sh eswrapper'
     restart: always
 
   # Kibana 最新稳定版：8.17.0（必须与 ES 版本完全一致）
@@ -125,8 +135,10 @@ services:
       - "5601:5601"  # Kibana 网页控制台端口
     environment:
       - ELASTICSEARCH_HOSTS=http://es:9200  # 连接 ES 容器内部地址
+    command: ["/usr/local/bin/kibana-docker", "--allow-root"]
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/kibana:/usr/share/kibana/data
+    user: "0"
     restart: always
     depends_on:
       - es  # 等待 ES 启动完成后再启动 Kibana
@@ -151,6 +163,7 @@ services:
       RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/rustfs0:/data/rustfs0
+    user: "0"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:9000/health || exit 1"]
       interval: 15s
