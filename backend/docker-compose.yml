@@ -1,23 +1,23 @@
 services:
   # PostgreSQL
   postgres:
-      image: pgvector/pgvector:pg16
-      container_name: knowledge_hub_postgres
-      restart: always
-      environment:
-        POSTGRES_USER: user
-        POSTGRES_PASSWORD: 123456
-        POSTGRES_DB: knowledge_hub
-      ports:
-        - "5432:5432"
-      volumes:
-        - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/postgres:/var/lib/postgresql/data
-        - ./init-scripts/postgresql:/docker-entrypoint-initdb.d
-      healthcheck:
-        test: ["CMD-SHELL", "pg_isready -U user -d hello_pg"]
-        interval: 5s
-        timeout: 5s
-        retries: 5
+    image: pgvector/pgvector:pg16
+    container_name: knowledge_hub_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: knowledge_hub
+    ports:
+      - "5432:5432"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/postgres:/var/lib/postgresql/data
+      - ./init-scripts/postgresql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d hello_pg"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # PostgreSQL GUI (pgAdmin)
   pgadmin:
@@ -34,7 +34,11 @@ services:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/pgadmin:/var/lib/pgadmin
     user: "0"
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:80/login', timeout=5)\""]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:80/login'', timeout=5)"',
+        ]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -58,7 +62,19 @@ services:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/mongo:/data/db
       - ./init-scripts/mongodb:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "-u", "mongo_user", "-p", "mongo_pass123", "--authenticationDatabase", "admin"]
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--eval",
+          "db.adminCommand('ping')",
+          "-u",
+          "mongo_user",
+          "-p",
+          "mongo_pass123",
+          "--authenticationDatabase",
+          "admin",
+        ]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -93,7 +109,7 @@ services:
     container_name: knowledge_hub_rabbitmq
     restart: unless-stopped
     ports:
-      - "5672:5672"   # AMQP
+      - "5672:5672" # AMQP
       - "15672:15672" # Management UI
     environment:
       RABBITMQ_DEFAULT_USER: guest
@@ -108,16 +124,16 @@ services:
 
   # Elasticsearch 8.17.0 + IK 中文分词（内置到镜像）
   es:
-    build: ./elasticsearch       # 从本地 Dockerfile 构建镜像（自带IK）
+    build: ./elasticsearch # 从本地 Dockerfile 构建镜像（自带IK）
     container_name: knowledge_hub_elasticsearch
     ports:
-      - "9200:9200"               # ES 访问端口
+      - "9200:9200" # ES 访问端口
     environment:
-      - discovery.type=single-node  # 单节点运行（开发环境）
-      - xpack.security.enabled=false  # 关闭安全认证，免密码访问
-      - xpack.security.http.ssl.enabled=false  # 关闭 HTTPS 加密
-      - xpack.security.transport.ssl.enabled=false  # 关闭节点传输加密
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m  # JVM 内存配置，避免占用过高
+      - discovery.type=single-node # 单节点运行（开发环境）
+      - xpack.security.enabled=false # 关闭安全认证，免密码访问
+      - xpack.security.http.ssl.enabled=false # 关闭 HTTPS 加密
+      - xpack.security.transport.ssl.enabled=false # 关闭节点传输加密
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m # JVM 内存配置，避免占用过高
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/es/data:/usr/share/elasticsearch/data
     user: "0"
@@ -132,16 +148,16 @@ services:
     image: kibana:8.17.0
     container_name: knowledge_hub_kibana
     ports:
-      - "5601:5601"  # Kibana 网页控制台端口
+      - "5601:5601" # Kibana 网页控制台端口
     environment:
-      - ELASTICSEARCH_HOSTS=http://es:9200  # 连接 ES 容器内部地址
+      - ELASTICSEARCH_HOSTS=http://es:9200 # 连接 ES 容器内部地址
     command: ["/usr/local/bin/kibana-docker", "--allow-root"]
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/kibana:/usr/share/kibana/data
     user: "0"
     restart: always
     depends_on:
-      - es  # 等待 ES 启动完成后再启动 Kibana
+      - es # 等待 ES 启动完成后再启动 Kibana
 
   # RustFS（S3 兼容对象存储）— PDF 抽图 / 原文件上传
   # 文档：https://docs.rustfs.com/installation/docker/
@@ -176,16 +192,45 @@ services:
     image: neo4j:latest
     container_name: knowledge_hub_neo4j
     ports:
-      - "7474:7474"   # Web 管理界面
-      - "7687:7687"   # Bolt 协议（代码连接）
+      - "7474:7474" # Web 管理界面
+      - "7687:7687" # Bolt 协议（代码连接）
     environment:
-      - NEO4J_AUTH=neo4j/CHANGE_ME  # 账号：neo4j  密码：12345678
-      - NEO4J_PLUGINS=["apoc"]     # 安装必备插件
+      - NEO4J_AUTH=neo4j/CHANGE_ME # 账号：neo4j  密码：12345678
+      - NEO4J_PLUGINS=["apoc"] # 安装必备插件
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/neo4j/data:/data
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/neo4j/logs:/logs
     restart: unless-stopped
+    # Redis — 密码重置验证码等
+  redis:
+    image: redis:7-alpine
+    container_name: knowledge_hub_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Web GUI: RedisInsight
+  redisinsight:
+    image: redis/redisinsight:2.50
+    container_name: knowledge_hub_redisinsight
+    restart: always
+    ports:
+      - "5540:5540"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/redisinsight:/data
+    environment:
+      - RI_HOST=0.0.0.0
+    depends_on:
+      redis:
+        condition: service_healthy
 
 networks:
   default:

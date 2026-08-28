@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS kh_user (
     password VARCHAR(255) NOT NULL,                 -- 密码（bcrypt 哈希）
     email VARCHAR(100),                             -- 邮箱（可选）
     real_name VARCHAR(50),                          -- 真实姓名 / 显示名
+    email_verified SMALLINT NOT NULL DEFAULT 1,     -- 0 未验证 1 已验证
     avatar VARCHAR(500),                            -- 头像 URL
     status SMALLINT NOT NULL DEFAULT 1,             -- 0 禁用 1 启用
     last_login_at TIMESTAMP,                        -- 最后登录时间
