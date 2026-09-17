@@ -46,7 +46,7 @@ These baseline results describe the source projects before migration.
 Status checked on 2026-09-17:
 
 - Completed: backend history was relocated to `backend/`, retaining 23 backend
-  commits. The monorepo snapshot is on branch `main` with 27 commits total.
+  commits. The monorepo snapshot is on branch `main` with 29 commits total.
 - Completed: frontend snapshot from `v15` commit `f209569` was imported into
   `frontend/`; its `.git` directory, history, and tracked `.env` were not
   imported. The historical `VITE_API_BASE` value was a relative path.
