@@ -1,6 +1,12 @@
 import { Client } from '@elastic/elasticsearch';
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { scalarToString } from '../common/scalar-string';
 import {
   ES_DOC_VISIBILITY_FIELDS,
   esVisibilityFilter,
@@ -36,14 +42,16 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const node = this.config.get(
+    const node = this.config.get<string>(
       'ELASTICSEARCH_NODE',
       'http://localhost:9200',
     );
     this.es = new Client({ node });
     try {
       const health = await this.es.cluster.health();
-      this.logger.log(`SearchIndex ES 已连接：${node}, status=${health.status}`);
+      this.logger.log(
+        `SearchIndex ES 已连接：${node}, status=${health.status}`,
+      );
       await this.ensureEsIndex();
       await this.ensureVisibilityMapping();
     } catch (error) {
@@ -178,7 +186,7 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
         ? {
             bool: {
               must: [
-                    {
+                {
                   multi_match: {
                     query: keyword,
                     fields: ['title^3', 'summary^2', 'content'],
@@ -225,7 +233,7 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
         const src = (hit._source ?? {}) as Record<string, unknown>;
         const highlight = hit.highlight ?? {};
         return {
-          id: String(src.id ?? hit._id),
+          id: scalarToString(src.id, hit._id ?? ''),
           title: src.title ?? '',
           summary: src.summary ?? null,
           categoryId: src.categoryId ?? null,

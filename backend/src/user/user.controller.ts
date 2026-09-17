@@ -87,10 +87,7 @@ export class UserController {
 
   @Put(':id/password/reset')
   @Roles(RoleCode.ADMIN)
-  async resetPassword(
-    @Param('id') id: string,
-    @Body() dto: ResetPasswordDto,
-  ) {
+  async resetPassword(@Param('id') id: string, @Body() dto: ResetPasswordDto) {
     await this.userService.resetPassword(id, dto.newPassword);
     return { message: '密码重置成功' };
   }

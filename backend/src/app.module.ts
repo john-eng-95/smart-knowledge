@@ -58,8 +58,11 @@ import { AiMessageEntity } from './ai/entities/ai-message.entity';
         type: 'postgres' as const,
         host: config.get<string>('POSTGRES_HOST', 'localhost'),
         port: config.get<number>('POSTGRES_PORT', 5432),
-        username: config.get<string>('POSTGRES_USER', 'user'),
-        password: config.get<string>('POSTGRES_PASSWORD', '123456'),
+        username: config.get<string>('POSTGRES_USER', 'knowledge_hub'),
+        password: config.get<string>(
+          'POSTGRES_PASSWORD',
+          'local-only-change-me',
+        ),
         database: config.get<string>('POSTGRES_DB', 'knowledge_hub'),
         entities: [
           DocumentEntity,
@@ -83,7 +86,7 @@ import { AiMessageEntity } from './ai/entities/ai-message.entity';
       useFactory: (config: ConfigService) => ({
         uri: config.get<string>(
           'MONGO_URI',
-          'mongodb://mongo_user:mongo_pass123@localhost:27017/knowledge_hub?authSource=admin',
+          'mongodb://mongo_user:local-only-change-me@localhost:27017/knowledge_hub?authSource=admin',
         ),
       }),
     }),

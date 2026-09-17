@@ -10,7 +10,6 @@ import {
 } from '@nestjs/common';
 import { PermissionService } from './permission.service';
 import {
-  AssignPermissionIdsDto,
   CreatePermissionDto,
   QueryPermissionDto,
   UpdatePermissionDto,

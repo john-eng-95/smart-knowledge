@@ -90,8 +90,10 @@ export class PermissionService {
       if (exists) throw new ConflictException('权限编码已存在');
       perm.permissionCode = dto.permissionCode;
     }
-    if (dto.permissionName !== undefined) perm.permissionName = dto.permissionName;
-    if (dto.permissionType !== undefined) perm.permissionType = dto.permissionType;
+    if (dto.permissionName !== undefined)
+      perm.permissionName = dto.permissionName;
+    if (dto.permissionType !== undefined)
+      perm.permissionType = dto.permissionType;
     if (dto.parentId !== undefined) {
       if (dto.parentId === id) {
         throw new BadRequestException('父权限不能是自己');
@@ -131,9 +133,7 @@ export class PermissionService {
   async page(query: QueryPermissionDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const qb = this.permRepo
-      .createQueryBuilder('p')
-      .where('p.deleted = false');
+    const qb = this.permRepo.createQueryBuilder('p').where('p.deleted = false');
     if (query.keyword?.trim()) {
       qb.andWhere(
         '(p.permission_name ILIKE :kw OR p.permission_code ILIKE :kw)',

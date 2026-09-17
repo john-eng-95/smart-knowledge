@@ -17,7 +17,8 @@ export interface SearchIndexMessage {
 }
 
 /** KG 建图 / 删图消息 */
-export type KgBuildType = 'BUILD_ALL' | 'BUILD_BY_DOC_IDS' | 'DELETE_BY_DOC_IDS';
+export type KgBuildType =
+  'BUILD_ALL' | 'BUILD_BY_DOC_IDS' | 'DELETE_BY_DOC_IDS';
 
 export interface KgBuildMessage {
   taskId: string;

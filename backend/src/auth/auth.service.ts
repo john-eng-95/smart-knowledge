@@ -8,11 +8,18 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthUser } from './auth-user.interface';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
-import { ResetPasswordByEmailDto, SendResetCodeDto } from '../user/dto/extra.dto';
+import {
+  ResetPasswordByEmailDto,
+  SendResetCodeDto,
+} from '../user/dto/extra.dto';
 import { UserService } from '../user/user.service';
 import { EmailService } from './email.service';
 import { EmailActivationService } from './email-activation.service';
-import { PasswordResetService, RESET_CODE_COOLDOWN_SECONDS, RESET_CODE_TTL_SECONDS } from './password-reset.service';
+import {
+  PasswordResetService,
+  RESET_CODE_COOLDOWN_SECONDS,
+  RESET_CODE_TTL_SECONDS,
+} from './password-reset.service';
 
 export interface LoginResult {
   accessToken: string;
@@ -61,8 +68,7 @@ export class AuthService {
 
   private requireEmailVerification(): boolean {
     return (
-      this.config.get<string>('REQUIRE_EMAIL_VERIFICATION', 'false') ===
-      'true'
+      this.config.get<string>('REQUIRE_EMAIL_VERIFICATION', 'false') === 'true'
     );
   }
 
@@ -97,9 +103,11 @@ export class AuthService {
     return this.buildLoginResult(user);
   }
 
-  async register(
-    dto: RegisterDto,
-  ): Promise<{ userId: string; message: string; emailVerificationRequired?: boolean }> {
+  async register(dto: RegisterDto): Promise<{
+    userId: string;
+    message: string;
+    emailVerificationRequired?: boolean;
+  }> {
     const result = await this.userService.register({
       ...dto,
       requireEmailVerification: this.requireEmailVerification(),
@@ -154,7 +162,11 @@ export class AuthService {
     const code = String(Math.floor(100000 + Math.random() * 900000));
     await this.passwordReset.set(dto.email, code);
     try {
-      await this.emailService.sendResetCodeEmail(dto.email, user.username, code);
+      await this.emailService.sendResetCodeEmail(
+        dto.email,
+        user.username,
+        code,
+      );
     } catch {
       await this.passwordReset.delete(dto.email);
       throw new BadRequestException('邮件发送失败，请稍后再试');

@@ -93,8 +93,7 @@ export class DocumentService {
     const wordCount = this.countWords(dto.content);
     const status = requestedStatus;
     // 未传 summary 时，从正文截取预览作为 contentSummary
-    const contentSummary =
-      dto.summary ?? this.buildContentSummary(dto.content);
+    const contentSummary = dto.summary ?? this.buildContentSummary(dto.content);
 
     // 先写 Mongo，_id 由驱动自动生成 ObjectId
     const contentDoc = await this.contentModel.create({
@@ -526,7 +525,9 @@ export class DocumentService {
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`文件解析失败：name=${originalFilename}, error=${message}`);
+      this.logger.error(
+        `文件解析失败：name=${originalFilename}, error=${message}`,
+      );
       throw new BadRequestException(`文件解析失败: ${message}`);
     }
 
@@ -603,7 +604,11 @@ export class DocumentService {
       return;
     }
 
-    if (isPublished && contentChanged && !this.reviewService.isRequireApproval()) {
+    if (
+      isPublished &&
+      contentChanged &&
+      !this.reviewService.isRequireApproval()
+    ) {
       await this.safePublish(doc);
       return;
     }

@@ -5,6 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { scalarToString } from '../common/scalar-string';
 import amqp, {
   AmqpConnectionManager,
   ChannelWrapper,
@@ -52,7 +53,7 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
 
     const url = this.config.get<string>(
       'RABBITMQ_URL',
-      'amqp://guest:guest@localhost:5672',
+      'amqp://knowledge_hub:local-only-change-me@localhost:5672',
     );
     const safeUrl = this.redactAmqpUrl(url);
     const timeoutMs = Number(
@@ -70,9 +71,7 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`RabbitMQ 已连接：${this.redactAmqpUrl(connectedUrl)}`);
     });
     this.connection.on('disconnect', (err) =>
-      this.logger.warn(
-        `RabbitMQ 断开：${this.errorMessage(err?.err ?? err)}`,
-      ),
+      this.logger.warn(`RabbitMQ 断开：${this.errorMessage(err?.err ?? err)}`),
     );
     this.connection.on('connectFailed', (err) =>
       this.logger.error(
@@ -124,11 +123,11 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
       typeof error === 'object' &&
       error &&
       'message' in error &&
-      typeof (error as { message: unknown }).message === 'string'
+      typeof error.message === 'string'
     ) {
       return (error as { message: string }).message;
     }
-    return String(error ?? 'unknown');
+    return scalarToString(error, 'unknown');
   }
 
   async onModuleDestroy() {
@@ -197,17 +196,17 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
 
   private async bindConsumers(ch: ConfirmChannel) {
     for (const [queue, handler] of this.handlers.entries()) {
-      await ch.consume(queue, async (msg) => {
+      await ch.consume(queue, (msg) => {
         if (!msg) return;
-        try {
-          await handler(msg);
-          ch.ack(msg);
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          this.logger.error(`消费失败 queue=${queue}: ${message}`);
-          ch.nack(msg, false, false);
-        }
+        void Promise.resolve()
+          .then(() => handler(msg))
+          .then(() => ch.ack(msg))
+          .catch((error: unknown) => {
+            this.logger.error(
+              `消费失败 queue=${queue}: ${this.errorMessage(error)}`,
+            );
+            ch.nack(msg, false, false);
+          });
       });
       this.logger.log(`已注册消费者：${queue}`);
     }

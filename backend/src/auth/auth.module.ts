@@ -23,7 +23,10 @@ import { UserModule } from '../user/user.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'dev-secret-change-me'),
+        secret: config.get<string>(
+          'JWT_SECRET',
+          'local-only-change-this-secret',
+        ),
       }),
     }),
     UserModule,

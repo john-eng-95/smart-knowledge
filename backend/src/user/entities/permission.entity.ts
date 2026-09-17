@@ -23,7 +23,12 @@ export class PermissionEntity {
   @Column({ name: 'permission_name', type: 'varchar', length: 50 })
   permissionName: string;
 
-  @Column({ name: 'permission_code', type: 'varchar', length: 100, unique: true })
+  @Column({
+    name: 'permission_code',
+    type: 'varchar',
+    length: 100,
+    unique: true,
+  })
   permissionCode: string;
 
   /** 1 菜单 2 按钮 3 接口 */

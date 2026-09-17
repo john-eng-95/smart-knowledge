@@ -78,8 +78,7 @@ export class RoleController {
   @Get(':id/permissions')
   @RequirePermission('system:role')
   async getRolePermissions(@Param('id') id: string) {
-    const permissionIds =
-      await this.permissionService.getRolePermissionIds(id);
+    const permissionIds = await this.permissionService.getRolePermissionIds(id);
     return { roleId: id, permissionIds };
   }
 

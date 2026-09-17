@@ -13,9 +13,7 @@ const memorySchema = z.object({
     ),
   write_session: z
     .boolean()
-    .describe(
-      '写入会话层：仅当前会话的任务、进度、待办、临时约定。',
-    ),
+    .describe('写入会话层：仅当前会话的任务、进度、待办、临时约定。'),
   reason: z.string().describe('分类理由，一句话'),
 });
 
@@ -99,7 +97,9 @@ export class ChatLongMemoryService {
       useResponsesApi: false,
       configuration: { baseURL },
     });
-    this.classifier = llm.withStructuredOutput(memorySchema) as ChatLongMemoryService['classifier'];
+    this.classifier = llm.withStructuredOutput(
+      memorySchema,
+    ) as ChatLongMemoryService['classifier'];
   }
 
   get enabled() {
@@ -169,12 +169,13 @@ export class ChatLongMemoryService {
     if (!this.client || !this.classifier) return;
     const extractFrom = [{ role: 'user' as const, content: question }];
     try {
-      const { write_user, write_session, reason } = await this.classifier.invoke([
-        new SystemMessage(CLASSIFIER_PROMPT),
-        new HumanMessage(
-          `用户：${question}\n助手（仅供判断，不要当作用户事实）：${answer.slice(0, 300)}`,
-        ),
-      ]);
+      const { write_user, write_session, reason } =
+        await this.classifier.invoke([
+          new SystemMessage(CLASSIFIER_PROMPT),
+          new HumanMessage(
+            `用户：${question}\n助手（仅供判断，不要当作用户事实）：${answer.slice(0, 300)}`,
+          ),
+        ]);
 
       const written: string[] = [];
       const addOpts = {

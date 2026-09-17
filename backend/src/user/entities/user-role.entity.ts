@@ -1,9 +1,4 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  PrimaryColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 import { bigintTransformer } from '../../common/transformers/bigint.transformer';
 
 /** 用户-角色关联（PostgreSQL kh_user_role） */

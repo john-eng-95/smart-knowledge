@@ -140,7 +140,12 @@ export class ExtractionService {
     for (const r of (parsed.relations ?? []).slice(0, this.maxRelations)) {
       const source = (r.source ?? '').trim();
       const target = (r.target ?? '').trim();
-      if (!source || !target || !entityNames.has(source) || !entityNames.has(target)) {
+      if (
+        !source ||
+        !target ||
+        !entityNames.has(source) ||
+        !entityNames.has(target)
+      ) {
         continue;
       }
       relations.push({

@@ -313,7 +313,7 @@ export class AiStreamService {
             `流式对话落库失败：${error instanceof Error ? error.message : error}`,
           );
         }
-        this.longMemory.rememberTurn(
+        void this.longMemory.rememberTurn(
           user.userId,
           persistSessionId,
           question,
@@ -396,7 +396,10 @@ function attachDashScopeReasoning(
   }
   const obj = value as Record<string, unknown>;
   const kwargs = obj.additional_kwargs as Record<string, unknown> | undefined;
-  if (typeof kwargs?.reasoning_content === 'string' && kwargs.reasoning_content) {
+  if (
+    typeof kwargs?.reasoning_content === 'string' &&
+    kwargs.reasoning_content
+  ) {
     kwargs.reasoning = {
       summary: [{ type: 'summary_text', text: kwargs.reasoning_content }],
     };
@@ -407,9 +410,7 @@ function attachDashScopeReasoning(
   attachDashScopeReasoning(obj.messages, seen);
 }
 
-function lastUserText(
-  messages: ChatStreamDto['messages'] | undefined,
-): string {
+function lastUserText(messages: ChatStreamDto['messages'] | undefined): string {
   if (!messages?.length) return '';
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const msg = messages[i];

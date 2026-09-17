@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages';
+import {
+  HumanMessage,
+  SystemMessage,
+  type BaseMessage,
+} from '@langchain/core/messages';
 import { z } from 'zod';
 import { compactRewriteContext } from './chat-memory.util';
 
@@ -67,8 +71,9 @@ export class ChatQueryRewriteService {
       useResponsesApi: false,
       configuration: { baseURL },
     });
-    this.rewriter =
-      llm.withStructuredOutput(rewriteSchema) as ChatQueryRewriteService['rewriter'];
+    this.rewriter = llm.withStructuredOutput(
+      rewriteSchema,
+    ) as ChatQueryRewriteService['rewriter'];
   }
 
   async rewrite(

@@ -1,0 +1,23 @@
+{
+  "name": "smart-knowledge",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.30.2",
+  "engines": {
+    "node": ">=22.22.0 <23"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter knowledge-hub-backend --filter knowledge-hub-frontend run dev",
+    "dev:backend": "pnpm --filter knowledge-hub-backend run dev",
+    "dev:frontend": "pnpm --filter knowledge-hub-frontend run dev",
+    "lint": "pnpm run lint:backend && pnpm run lint:frontend",
+    "lint:backend": "pnpm --filter knowledge-hub-backend run lint",
+    "lint:frontend": "pnpm --filter knowledge-hub-frontend run lint",
+    "typecheck": "pnpm --filter knowledge-hub-backend run typecheck && pnpm --filter knowledge-hub-frontend run typecheck",
+    "test": "pnpm --filter knowledge-hub-backend run test && pnpm --filter knowledge-hub-frontend run test",
+    "test:e2e": "pnpm --filter knowledge-hub-backend run test:e2e",
+    "build": "pnpm --filter knowledge-hub-backend run build && pnpm --filter knowledge-hub-frontend run build",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down"
+  }
+}

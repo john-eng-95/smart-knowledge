@@ -1,7 +1,10 @@
-import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto, RefreshTokenDto, RegisterDto } from './dto/auth.dto';
-import { ResetPasswordByEmailDto, SendResetCodeDto } from '../user/dto/extra.dto';
+import {
+  ResetPasswordByEmailDto,
+  SendResetCodeDto,
+} from '../user/dto/extra.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthUser } from './auth-user.interface';

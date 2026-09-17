@@ -21,7 +21,10 @@ export class RoleService {
   ) {}
 
   async listAll() {
-    return this.roleRepo.find({ where: { status: 1 }, order: { roleName: 'ASC' } });
+    return this.roleRepo.find({
+      where: { status: 1 },
+      order: { roleName: 'ASC' },
+    });
   }
 
   async getById(id: string) {

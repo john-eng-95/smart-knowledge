@@ -46,10 +46,10 @@ export class RustfsService implements OnModuleInit {
       'RUSTFS_ENDPOINT',
       'http://localhost:9000',
     );
-    const accessKey = this.config.get<string>('RUSTFS_ACCESS_KEY', 'rustfsadmin');
+    const accessKey = this.config.get<string>('RUSTFS_ACCESS_KEY', 'localdev');
     const secretKey = this.config.get<string>(
       'RUSTFS_SECRET_KEY',
-      'rustfsadmin',
+      'local-only-rustfs-secret',
     );
     const region = this.config.get<string>('RUSTFS_REGION', 'us-east-1');
     this.bucket = this.config.get<string>('RUSTFS_BUCKET', 'knowledge-hub');
@@ -134,7 +134,11 @@ export class RustfsService implements OnModuleInit {
     } catch (err) {
       // 并发创建时可能已存在
       const message = err instanceof Error ? err.message : String(err);
-      if (!/BucketAlreadyOwnedByYou|BucketAlreadyExists|already exists/i.test(message)) {
+      if (
+        !/BucketAlreadyOwnedByYou|BucketAlreadyExists|already exists/i.test(
+          message,
+        )
+      ) {
         throw err;
       }
     }
@@ -151,9 +155,7 @@ function formatDatePath(): string {
 
 function sanitizeBaseName(fileName: string): string {
   const base = fileName.replace(/\.[^.]+$/, '') || 'file';
-  return base
-    .replace(/[^\w\u4e00-\u9fff.-]+/g, '_')
-    .slice(0, 64);
+  return base.replace(/[^\w\u4e00-\u9fff.-]+/g, '_').slice(0, 64);
 }
 
 function guessExt(contentType: string): string {

@@ -9,11 +9,7 @@ import { nextSnowflakeId } from '../common/snowflake-id';
 import { TeamEntity } from './entities/team.entity';
 import { TeamMemberEntity } from './entities/team-member.entity';
 import { UserEntity } from '../user/entities/user.entity';
-import {
-  CreateTeamDto,
-  QueryTeamDto,
-  UpdateTeamDto,
-} from './dto/team.dto';
+import { CreateTeamDto, QueryTeamDto, UpdateTeamDto } from './dto/team.dto';
 
 @Injectable()
 export class TeamService {
@@ -121,14 +117,11 @@ export class TeamService {
   async page(query: QueryTeamDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const qb = this.teamRepo
-      .createQueryBuilder('t')
-      .where('t.deleted = false');
+    const qb = this.teamRepo.createQueryBuilder('t').where('t.deleted = false');
     if (query.keyword?.trim()) {
-      qb.andWhere(
-        '(t.team_name ILIKE :kw OR t.team_code ILIKE :kw)',
-        { kw: `%${query.keyword.trim()}%` },
-      );
+      qb.andWhere('(t.team_name ILIKE :kw OR t.team_code ILIKE :kw)', {
+        kw: `%${query.keyword.trim()}%`,
+      });
     }
     if (query.status !== undefined) {
       qb.andWhere('t.status = :status', { status: query.status });
@@ -153,9 +146,7 @@ export class TeamService {
           ...t,
           children: rootOnly ? [] : build(t.id),
         }));
-    const rootNodes = teams.filter(
-      (t) => !t.parentId || t.parentId === '0',
-    );
+    const rootNodes = teams.filter((t) => !t.parentId || t.parentId === '0');
     return rootOnly
       ? rootNodes
       : rootNodes.map((t) => ({
@@ -173,7 +164,9 @@ export class TeamService {
       throw new NotFoundException('部分用户不存在');
     }
     for (const userId of userIds) {
-      const exists = await this.memberRepo.findOne({ where: { teamId, userId } });
+      const exists = await this.memberRepo.findOne({
+        where: { teamId, userId },
+      });
       if (exists) continue;
       await this.memberRepo.save(
         this.memberRepo.create({

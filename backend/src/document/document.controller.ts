@@ -114,20 +114,14 @@ export class DocumentController {
 
   /** 当前待审记录（review_result IS NULL） */
   @Get(':id/reviews/current')
-  @RequirePermission(
-    PermissionCode.documentList,
-    PermissionCode.documentReview,
-  )
+  @RequirePermission(PermissionCode.documentList, PermissionCode.documentReview)
   getCurrentReview(@Param('id') id: string) {
     return this.reviewService.getCurrentReview(id);
   }
 
   /** 该文档全部审核历史，按 created_at 倒序 */
   @Get(':id/reviews/history')
-  @RequirePermission(
-    PermissionCode.documentList,
-    PermissionCode.documentReview,
-  )
+  @RequirePermission(PermissionCode.documentList, PermissionCode.documentReview)
   getReviewHistory(@Param('id') id: string) {
     return this.reviewService.getReviewHistory(id);
   }

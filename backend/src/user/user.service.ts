@@ -133,8 +133,9 @@ export class UserService {
       throw new UnauthorizedException('用户名或密码错误');
     }
     const roles = await this.getRoleCodes(user.id);
-    const permissions =
-      await this.permissionService.getUserPermissionCodes(user.id);
+    const permissions = await this.permissionService.getUserPermissionCodes(
+      user.id,
+    );
     return this.toAuthUser(user, roles, permissions);
   }
 
@@ -197,8 +198,7 @@ export class UserService {
     });
     await this.userRepo.save(user);
 
-    const roleCodes =
-      dto.roleCodes?.length ? dto.roleCodes : [RoleCode.USER];
+    const roleCodes = dto.roleCodes?.length ? dto.roleCodes : [RoleCode.USER];
     await this.replaceRoles(userId, roleCodes);
     return userId;
   }
@@ -222,9 +222,7 @@ export class UserService {
   async pageUsers(query: QueryUserDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const qb = this.userRepo
-      .createQueryBuilder('u')
-      .where('u.deleted = false');
+    const qb = this.userRepo.createQueryBuilder('u').where('u.deleted = false');
 
     if (query.keyword?.trim()) {
       const kw = `%${query.keyword.trim()}%`;
@@ -237,11 +235,7 @@ export class UserService {
       qb.andWhere('u.status = :status', { status: query.status });
     }
     if (query.roleCode) {
-      qb.innerJoin(
-        UserRoleEntity,
-        'ur',
-        'ur.user_id = u.id',
-      ).innerJoin(
+      qb.innerJoin(UserRoleEntity, 'ur', 'ur.user_id = u.id').innerJoin(
         RoleEntity,
         'r',
         'r.id = ur.role_id AND r.role_code = :roleCode',
@@ -364,7 +358,10 @@ export class UserService {
     await this.userRepo.save(user);
   }
 
-  async resetPasswordByEmail(email: string, newPassword: string): Promise<void> {
+  async resetPasswordByEmail(
+    email: string,
+    newPassword: string,
+  ): Promise<void> {
     const user = await this.findByEmail(email);
     if (!user) throw new NotFoundException('该邮箱未注册');
     user.password = await hash(newPassword, 10);
@@ -392,7 +389,11 @@ export class UserService {
       .addSelect('COALESCE(SUM(d.comment_count), 0)', 'commentCount')
       .where('d.author_id = :userId', { userId })
       .andWhere('d.deleted = false')
-      .getRawOne<{ viewCount: string; likeCount: string; commentCount: string }>();
+      .getRawOne<{
+        viewCount: string;
+        likeCount: string;
+        commentCount: string;
+      }>();
     return {
       documentCount,
       viewCount: Number(raw?.viewCount ?? 0),

@@ -9,11 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { TeamService } from './team.service';
-import {
-  CreateTeamDto,
-  QueryTeamDto,
-  UpdateTeamDto,
-} from './dto/team.dto';
+import { CreateTeamDto, QueryTeamDto, UpdateTeamDto } from './dto/team.dto';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';

@@ -29,9 +29,7 @@ export class ChatShortMemoryService {
     this.ttlSeconds = Number(
       config.get('CHAT_SHORT_MEMORY_TTL_SECONDS', 86400),
     );
-    this.maxMessages = Number(
-      config.get('CHAT_SHORT_MEMORY_MAX_MESSAGES', 20),
-    );
+    this.maxMessages = Number(config.get('CHAT_SHORT_MEMORY_MAX_MESSAGES', 20));
     this.keyPrefix = config.get('CHAT_SHORT_MEMORY_KEY_PREFIX', 'kh:chat');
   }
 
@@ -40,13 +38,21 @@ export class ChatShortMemoryService {
   }
 
   /** 命中返回消息；key 不存在或 Redis 故障返回 null */
-  async tryLoad(userId: string, sessionId: string): Promise<BaseMessage[] | null> {
+  async tryLoad(
+    userId: string,
+    sessionId: string,
+  ): Promise<BaseMessage[] | null> {
     try {
       const raw = await this.redis.get(this.key(userId, sessionId));
       if (!raw) return null;
       const parsed = JSON.parse(raw) as unknown;
       if (!Array.isArray(parsed)) return null;
-      return mapStoredMessagesToChatMessages(parsed).filter(isWorkingMessage);
+      const storedMessages = parsed as Parameters<
+        typeof mapStoredMessagesToChatMessages
+      >[0];
+      return mapStoredMessagesToChatMessages(storedMessages).filter(
+        isWorkingMessage,
+      );
     } catch (error) {
       this.logger.warn(
         `短期记忆 Redis 读取失败，改走数据库：${error instanceof Error ? error.message : error}`,
@@ -63,7 +69,11 @@ export class ChatShortMemoryService {
     const working = messages.filter(isWorkingMessage).slice(-this.maxMessages);
     try {
       const payload = JSON.stringify(mapChatMessagesToStoredMessages(working));
-      await this.redis.set(this.key(userId, sessionId), payload, this.ttlSeconds);
+      await this.redis.set(
+        this.key(userId, sessionId),
+        payload,
+        this.ttlSeconds,
+      );
     } catch (error) {
       this.logger.warn(
         `短期记忆 Redis 写入失败：${error instanceof Error ? error.message : error}`,

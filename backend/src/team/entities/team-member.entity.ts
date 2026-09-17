@@ -12,7 +12,12 @@ export class TeamMemberEntity {
   @Column({ name: 'user_id', type: 'bigint', transformer: bigintTransformer })
   userId: string;
 
-  @Column({ name: 'member_role', type: 'varchar', length: 20, default: 'member' })
+  @Column({
+    name: 'member_role',
+    type: 'varchar',
+    length: 20,
+    default: 'member',
+  })
   memberRole: string;
 
   @CreateDateColumn({ name: 'created_at' })

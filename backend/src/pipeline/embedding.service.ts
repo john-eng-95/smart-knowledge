@@ -44,11 +44,11 @@ export class EmbeddingService {
       );
     }
 
-    const baseUrl = config.get(
+    const baseUrl = config.get<string>(
       'EMBEDDING_BASE_URL',
       'https://dashscope.aliyuncs.com/compatible-mode/v1',
     );
-    const model = config.get('EMBEDDING_MODEL', 'text-embedding-v3');
+    const model = config.get<string>('EMBEDDING_MODEL', 'text-embedding-v3');
 
     this.embeddings = new OpenAIEmbeddings({
       apiKey,

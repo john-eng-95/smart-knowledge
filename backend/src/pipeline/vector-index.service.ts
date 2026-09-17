@@ -1,7 +1,13 @@
 import { Client } from '@elastic/elasticsearch';
 import type { estypes } from '@elastic/elasticsearch';
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { scalarToString } from '../common/scalar-string';
 import { ChunkHit, DocumentChunk } from './types/pipeline.types';
 import {
   ES_CHUNK_VISIBILITY_FIELDS,
@@ -42,7 +48,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const node = this.config.get(
+    const node = this.config.get<string>(
       'ELASTICSEARCH_NODE',
       'http://localhost:9200',
     );
@@ -105,9 +111,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
   /** 删除某文档全部向量块（发布重建 / 下架时调用）。 */
   async deleteByDocId(documentId: string) {
     if (!this.es) {
-      this.logger.warn(
-        `跳过删除向量块（ES 不可用）：documentId=${documentId}`,
-      );
+      this.logger.warn(`跳过删除向量块（ES 不可用）：documentId=${documentId}`);
       return;
     }
 
@@ -166,7 +170,9 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
       throw new Error(`ES 批量索引部分失败：${failed.length} 条`);
     }
 
-    this.logger.log(`ES 批量索引成功：${chunks.length} chunks → ${CHUNK_INDEX}`);
+    this.logger.log(
+      `ES 批量索引成功：${chunks.length} chunks → ${CHUNK_INDEX}`,
+    );
   }
 
   /**
@@ -202,7 +208,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
             },
           },
           vis,
-        ) as estypes.QueryDslQueryContainer,
+        ),
         _source: [
           'chunk_id',
           'document_id',
@@ -245,7 +251,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
         k,
         num_candidates: Math.max(k * 10, 50),
       };
-      if (vis) knn.filter = vis as estypes.QueryDslQueryContainer;
+      if (vis) knn.filter = vis;
       const response = await this.es.search({
         index: CHUNK_INDEX,
         size: k,
@@ -308,11 +314,11 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
     return hits.map((hit) => {
       const src = (hit._source ?? {}) as Record<string, unknown>;
       return {
-        chunkId: String(src.chunk_id ?? hit._id),
-        documentId: String(src.document_id ?? ''),
-        documentTitle: String(src.document_title ?? ''),
-        content: String(src.content ?? ''),
-        heading: (src.heading as string | null) ?? null,
+        chunkId: scalarToString(src.chunk_id, hit._id ?? ''),
+        documentId: scalarToString(src.document_id),
+        documentTitle: scalarToString(src.document_title),
+        content: scalarToString(src.content),
+        heading: typeof src.heading === 'string' ? src.heading : null,
         score: hit._score ?? 0,
       };
     });
@@ -329,10 +335,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
   ): ChunkHit[] {
     const fused = new Map<string, ChunkHit>();
 
-    const addChannel = (
-      hits: ChunkHit[],
-      channel: 'keyword' | 'vector',
-    ) => {
+    const addChannel = (hits: ChunkHit[], channel: 'keyword' | 'vector') => {
       const sorted = [...hits].sort((a, b) => b.score - a.score);
       sorted.forEach((hit, rank) => {
         const rrf = 1 / (rrfC + rank + 1);

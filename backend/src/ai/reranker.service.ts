@@ -27,15 +27,14 @@ export class RerankerService {
   private readonly endpoint: string;
 
   constructor(config: ConfigService) {
-    this.enabled =
-      config.get<string>('RAG_RERANK_ENABLED', 'true') !== 'false';
+    this.enabled = config.get<string>('RAG_RERANK_ENABLED', 'true') !== 'false';
     this.apiKey =
       config.get<string>('RERANK_API_KEY') ||
       config.get<string>('DASHSCOPE_API_KEY') ||
       config.get<string>('OPENAI_API_KEY') ||
       undefined;
     this.model = config.get('RAG_RERANK_MODEL', 'qwen3-rerank');
-    const host = config.get(
+    const host = config.get<string>(
       'RERANK_BASE_URL',
       'https://dashscope.aliyuncs.com',
     );

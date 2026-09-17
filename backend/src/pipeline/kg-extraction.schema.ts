@@ -43,7 +43,9 @@ const ENTITY_TYPE_SET = new Set<string>(KG_ENTITY_TYPES);
 const RELATION_TYPE_SET = new Set<string>(KG_RELATION_TYPES);
 
 /** 将 LLM 返回的类型规范到枚举，未知值走兜底 */
-export function normalizeEntityType(raw: string | undefined | null): KgEntityType {
+export function normalizeEntityType(
+  raw: string | undefined | null,
+): KgEntityType {
   const upper = (raw ?? '').trim().toUpperCase();
   if (ENTITY_TYPE_SET.has(upper)) return upper as KgEntityType;
   return 'CONCEPT';
@@ -72,7 +74,10 @@ export const kgExtractedRelationSchema = z.object({
   target: z.string().describe('终点实体 name，必须是已抽取实体'),
   // 用 string 而非 enum：模型常写 type 或自造类型（如 APPLIES_TO），整段 enum 校验失败会丢整块抽取
   relation: z.string().describe('关系类型，字段名必须是 relation').optional(),
-  type: z.string().describe('兼容：模型误把关系类型写成 type 时读取').optional(),
+  type: z
+    .string()
+    .describe('兼容：模型误把关系类型写成 type 时读取')
+    .optional(),
   weight: z.number().min(0).max(1).describe('置信度 0-1').optional(),
 });
 

@@ -60,7 +60,5 @@ export function canArchive(status: DocumentStatus): boolean {
 
 /** 草稿或已发布可提交审核（已发布再提审会先清索引） */
 export function canSubmitReview(status: DocumentStatus): boolean {
-  return (
-    status === DocumentStatus.Draft || status === DocumentStatus.Published
-  );
+  return status === DocumentStatus.Draft || status === DocumentStatus.Published;
 }

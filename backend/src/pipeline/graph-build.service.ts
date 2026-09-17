@@ -1,9 +1,15 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import { ChunkingService } from './chunking.service';
 import { ExtractionService } from './extraction.service';
-import { PipelineDocument } from './types/pipeline.types';
+import { ExtractionResult, PipelineDocument } from './types/pipeline.types';
+import { scalarToString } from '../common/scalar-string';
 import {
   neo4jAccessParams,
   neo4jDocumentAccessWhere,
@@ -48,9 +54,12 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('Neo4j 已禁用（NEO4J_ENABLED=false）');
       return;
     }
-    const uri = this.config.get('NEO4J_URI', 'bolt://localhost:7687');
-    const user = this.config.get('NEO4J_USER', 'neo4j');
-    const password = this.config.get('NEO4J_PASSWORD', 'password');
+    const uri = this.config.get<string>('NEO4J_URI', 'bolt://localhost:7687');
+    const user = this.config.get<string>('NEO4J_USER', 'neo4j');
+    const password = this.config.get<string>(
+      'NEO4J_PASSWORD',
+      'local-only-neo4j-pass',
+    );
     this.driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
     try {
       await this.driver.verifyConnectivity();
@@ -159,7 +168,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
         );
 
         // ④ 抽实体关系并落图；单块失败不阻断其余块（图已先清过）
-        let extracted;
+        let extracted: ExtractionResult;
         try {
           extracted = await this.extractionService.extract(
             chunk.content,
@@ -167,7 +176,8 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
             doc.title,
           );
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           this.logger.error(
             `KG 抽取失败，跳过该块：documentId=${doc.id}, chunk=${chunk.chunkIndex}, ${message}`,
           );
@@ -301,7 +311,11 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
                e.description AS description
         LIMIT $limit
         `,
-        { type: type ?? null, limit: neo4j.int(cap), ...neo4jAccessParams(scope) },
+        {
+          type: type ?? null,
+          limit: neo4j.int(cap),
+          ...neo4jAccessParams(scope),
+        },
       );
       return result.records.map((record) => ({
         id: record.get('id') as string,
@@ -478,7 +492,11 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
         relatedCount: 0,
         entityTypes: [] as Array<{ type: string; count: number }>,
       },
-      topEntities: [] as Array<{ name: string; type: string | null; degree: number }>,
+      topEntities: [] as Array<{
+        name: string;
+        type: string | null;
+        degree: number;
+      }>,
       recentNodes: [] as Array<{
         id: string;
         name: string;
@@ -689,7 +707,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
       };
 
       const splitTags = (raw: unknown) =>
-        String(raw ?? '')
+        scalarToString(raw)
           .split(/[,，]/)
           .map((t) => t.trim())
           .filter(Boolean);
