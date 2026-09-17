@@ -34,7 +34,7 @@ export default function DocumentsPage() {
       setTotal(res.total)
       setPage(nextPage)
     } catch (error) {
-      message.error(error instanceof ApiError ? error.message : '加载失败')
+      message.error(error instanceof ApiError ? error.message : 'Failed to load documents')
     } finally {
       setLoading(false)
     }
@@ -47,12 +47,12 @@ export default function DocumentsPage() {
   return (
     <div className="kh-page">
       <p className="kh-access-hint">
-        列表只展示你能看的文档：公开、所在团队，以及自己写的。编辑 / 发布仅作者或管理员可用。
+        The list shows only documents you can access: public, team-shared, or authored by you. Editing and publishing are available to authors and administrators.
       </p>
       <Space style={{ marginBottom: 16 }} wrap>
         <Input
           allowClear
-          placeholder="标题搜索"
+          placeholder="Search by title"
           style={{ width: 240 }}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -60,7 +60,7 @@ export default function DocumentsPage() {
         />
         <Select
           allowClear
-          placeholder="状态"
+          placeholder="Status"
           style={{ width: 140 }}
           value={status}
           onChange={setStatus}
@@ -73,13 +73,13 @@ export default function DocumentsPage() {
           checked={mineOnly}
           onChange={(e) => setMineOnly(e.target.checked)}
         >
-          仅我的
+          Mine only
         </Checkbox>
-        <Button onClick={() => void load(1)}>查询</Button>
+        <Button onClick={() => void load(1)}>Search</Button>
         {can(user, 'document:create') ? (
           <>
             <Button type="primary" onClick={() => navigate('/documents/new')}>
-              新建文档
+              New document
             </Button>
             <Upload
               showUploadList={false}
@@ -88,15 +88,15 @@ export default function DocumentsPage() {
                 form.append('file', file)
                 try {
                   const res = await documentApi.uploadParse(form)
-                  message.success('已解析为草稿，可在编辑页设置公开或团队')
+                  message.success('Parsed as a draft. Set public or team visibility on the edit page.')
                   navigate(`/documents/${res.documentId}/edit`)
                 } catch (error) {
-                  message.error(error instanceof ApiError ? error.message : '上传失败')
+                  message.error(error instanceof ApiError ? error.message : 'Upload failed')
                 }
                 return false
               }}
             >
-              <Button>上传解析</Button>
+              <Button>Upload and parse</Button>
             </Upload>
           </>
         ) : null}
@@ -108,7 +108,7 @@ export default function DocumentsPage() {
         pagination={{ current: page, pageSize, total, onChange: (p) => void load(p) }}
         columns={[
           {
-            title: '标题',
+            title: 'Title',
             dataIndex: 'title',
             render: (value: string, row: DocumentItem) => (
               <a
@@ -121,49 +121,49 @@ export default function DocumentsPage() {
             ),
           },
           {
-            title: '文件类型',
+            title: 'File type',
             dataIndex: 'title',
             width: 100,
             render: (title: string) => fileTypeLabel(title),
           },
           {
-            title: '状态',
+            title: 'Status',
             dataIndex: 'status',
             width: 100,
             render: (s: number) => <Tag color={DOC_STATUS[s]?.color}>{DOC_STATUS[s]?.label}</Tag>,
           },
           {
-            title: '可见性',
+            title: 'Visibility',
             width: 110,
             render: (_: unknown, row: DocumentItem) => {
               const vis = visibilityMeta(row)
               return <Tag color={vis.color}>{vis.label}</Tag>
             },
           },
-          { title: '更新时间', dataIndex: 'updatedAt', width: 180, render: formatTime },
+          { title: 'Updated', dataIndex: 'updatedAt', width: 180, render: formatTime },
           {
-            title: '操作',
+            title: 'Actions',
             width: 160,
             render: (_: unknown, row: DocumentItem) => {
               const writable = can(user, 'document:edit') && canWriteDocument(user, row)
               return (
                 <Space>
                   {writable ? (
-                    <a onClick={() => navigate(`/documents/${row.id}/edit`)}>编辑</a>
+                    <a onClick={() => navigate(`/documents/${row.id}/edit`)}>Edit</a>
                   ) : null}
                   {writable && row.status === 0 ? (
                     <a
                       onClick={async () => {
                         try {
                           await documentApi.publish(row.id)
-                          message.success('已提交发布')
+                          message.success('Submitted for publication')
                           void load()
                         } catch (error) {
-                          message.error(error instanceof ApiError ? error.message : '发布失败')
+                          message.error(error instanceof ApiError ? error.message : 'Publish failed')
                         }
                       }}
                     >
-                      发布
+                      Publish
                     </a>
                   ) : null}
                 </Space>

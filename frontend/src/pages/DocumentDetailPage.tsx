@@ -27,9 +27,9 @@ export default function DocumentDetailPage() {
       setDoc(null)
       if (error instanceof ApiError && error.status === 403) {
         setForbidden(true)
-        message.error('无权查看该文档')
+        message.error('You do not have permission to view this document')
       } else {
-        message.error(error instanceof ApiError ? error.message : '加载失败')
+        message.error(error instanceof ApiError ? error.message : 'Failed to load document')
       }
     } finally {
       setLoading(false)
@@ -52,9 +52,9 @@ export default function DocumentDetailPage() {
     return (
       <div className="kh-page">
         <Empty
-          description={forbidden ? '无权查看该文档' : '文档不存在或已删除'}
+          description={forbidden ? 'You do not have permission to view this document' : 'Document not found or deleted'}
         >
-          <Button onClick={() => navigate('/documents')}>返回列表</Button>
+          <Button onClick={() => navigate('/documents')}>Back to documents</Button>
         </Empty>
       </div>
     )
@@ -67,9 +67,9 @@ export default function DocumentDetailPage() {
   return (
     <div className="kh-page">
       <Space style={{ marginBottom: 12 }} wrap>
-        <Button onClick={() => navigate('/documents')}>返回列表</Button>
+        <Button onClick={() => navigate('/documents')}>Back to documents</Button>
         {can(user, 'document:edit') && writable ? (
-          <Button onClick={() => navigate(`/documents/${id}/edit`)}>编辑</Button>
+          <Button onClick={() => navigate(`/documents/${id}/edit`)}>Edit</Button>
         ) : null}
         {can(user, 'document:edit') && writable && (doc.status === 0 || doc.status === 2) ? (
           <Button
@@ -77,13 +77,13 @@ export default function DocumentDetailPage() {
             onClick={async () => {
               try {
                 setDoc(await documentApi.publish(id))
-                message.success('已发布（若开启审核则进入待审）')
+                message.success('Published. If review is enabled, it has been submitted for review.')
               } catch (error) {
-                message.error(error instanceof ApiError ? error.message : '发布失败')
+                message.error(error instanceof ApiError ? error.message : 'Publish failed')
               }
             }}
           >
-            发布
+            Publish
           </Button>
         ) : null}
         {can(user, 'document:edit') && writable && doc.status === 1 ? (
@@ -92,42 +92,42 @@ export default function DocumentDetailPage() {
               onClick={async () => {
                 try {
                   setDoc(await documentApi.saveDraft(id))
-                  message.success('已下架为草稿')
+                  message.success('Unpublished and saved as draft')
                 } catch (error) {
-                  message.error(error instanceof ApiError ? error.message : '操作失败')
+                  message.error(error instanceof ApiError ? error.message : 'Operation failed')
                 }
               }}
             >
-              下架编辑
+              Unpublish and edit
             </Button>
             <Button
               onClick={async () => {
                 try {
                   setDoc(await documentApi.archive(id))
-                  message.success('已归档')
+                  message.success('Archived')
                 } catch (error) {
-                  message.error(error instanceof ApiError ? error.message : '归档失败')
+                  message.error(error instanceof ApiError ? error.message : 'Archive failed')
                 }
               }}
             >
-              归档
+              Archive
             </Button>
           </>
         ) : null}
         {can(user, 'document:delete') && writable ? (
           <Popconfirm
-            title="确认删除该文档？"
+            title="Delete this document?"
             onConfirm={async () => {
               try {
                 await documentApi.remove(id)
-                message.success('已删除')
+                message.success('Deleted')
                 navigate('/documents')
               } catch (error) {
-                message.error(error instanceof ApiError ? error.message : '删除失败')
+                message.error(error instanceof ApiError ? error.message : 'Delete failed')
               }
             }}
           >
-            <Button danger>删除</Button>
+            <Button danger>Delete</Button>
           </Popconfirm>
         ) : null}
       </Space>
@@ -141,7 +141,7 @@ export default function DocumentDetailPage() {
       <Space wrap>
         <Tag color={status?.color}>{status?.label}</Tag>
         <Tag color={vis.color}>{vis.label}</Tag>
-        <span style={{ color: '#8c8c8c' }}>更新于 {formatTime(doc.updatedAt)}</span>
+        <span style={{ color: '#8c8c8c' }}>Updated {formatTime(doc.updatedAt)}</span>
       </Space>
       {doc.summary ? (
         <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>

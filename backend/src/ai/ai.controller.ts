@@ -37,8 +37,8 @@ export class AiController {
   ) {}
 
   /**
-   * RAG 混合检索：关键词 BM25 + 向量 kNN → RRF → rerank。
-   * 不调用 LLM，只返回 kh_chunk 命中。
+   * Hybrid RAG retrieval: keyword BM25 + vector kNN -> RRF -> rerank.
+   * Does not call the LLM; returns matching kh_chunk records only.
    */
   @Post('rag/search')
   @RequirePermission(PermissionCode.search)
@@ -46,14 +46,14 @@ export class AiController {
     return this.retrieval.retrieve(dto.query.trim(), dto.topK ?? 5, user);
   }
 
-  /** RAG 对话：混合检索后再作答；写入本人会话 */
+  /** RAG chat: retrieve context, generate an answer, and save it to the user's session. */
   @Post('ai/chat')
   @RequirePermission(PermissionCode.search)
   chat(@Body() dto: ChatDto, @CurrentUser() user: AuthUser) {
     return this.aiChat.chat(dto.content, dto.topK ?? 5, user, dto.sessionId);
   }
 
-  /** LangChain Agent 流式作答，经 @ai-sdk/langchain 转成 UI Message Stream */
+  /** Stream LangChain Agent responses through @ai-sdk/langchain as a UI Message Stream. */
   @Post('ai/chat/stream')
   @RequirePermission(PermissionCode.search)
   streamChat(

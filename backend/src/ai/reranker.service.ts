@@ -14,9 +14,9 @@ interface DashScopeRerankResponse {
 }
 
 /**
- * 文本 reranker（DashScope text-rerank）。
+ * Text reranker (DashScope text-rerank).
  *
- * <p>对 RRF 粗排后的候选块打相关性分。未配置或调用失败时返回 null，由上层降级为 RRF 顺序。</p>
+ * <p>Scores RRF candidates for relevance. Returns null when unconfigured or unavailable so callers can fall back to RRF order.</p>
  */
 @Injectable()
 export class RerankerService {
@@ -46,8 +46,8 @@ export class RerankerService {
   }
 
   /**
-   * 按 query 与文档相关性重排，取 topN。
-   * 失败返回 null。
+   * Rerank documents by relevance to the query and return topN.
+   * Returns null on failure.
    */
   async rerank(
     query: string,
@@ -56,7 +56,9 @@ export class RerankerService {
   ): Promise<ChunkHit[] | null> {
     if (!candidates.length) return [];
     if (!this.isEnabled()) {
-      this.logger.warn('Reranker 未启用或未配置 Key，跳过重排');
+      this.logger.warn(
+        'Reranker is disabled or its key is not configured; skipping reranking',
+      );
       return null;
     }
 
@@ -83,14 +85,14 @@ export class RerankerService {
       };
       if (!response.ok) {
         this.logger.warn(
-          `Rerank 调用失败：status=${response.status}, code=${body.code ?? ''}, message=${body.message ?? ''}`,
+          `Rerank request failed: status=${response.status}, code=${body.code ?? ''}, message=${body.message ?? ''}`,
         );
         return null;
       }
 
       const results = body.output?.results ?? body.results ?? [];
       if (!results.length) {
-        this.logger.warn('Rerank 返回空结果，降级为 RRF');
+        this.logger.warn('Rerank returned no results; falling back to RRF');
         return null;
       }
 
@@ -102,12 +104,12 @@ export class RerankerService {
         }));
 
       this.logger.log(
-        `Rerank 完成：model=${this.model}, in=${candidates.length}, out=${reranked.length}`,
+        `Rerank completed: model=${this.model}, in=${candidates.length}, out=${reranked.length}`,
       );
       return reranked;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Rerank 异常，降级为 RRF：${message}`);
+      this.logger.warn(`Rerank failed; falling back to RRF: ${message}`);
       return null;
     }
   }

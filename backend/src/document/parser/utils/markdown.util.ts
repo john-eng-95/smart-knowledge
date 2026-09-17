@@ -1,4 +1,4 @@
-/** 规范化 Markdown：统一换行，压缩连续空行，去首尾空白 */
+/** Normalize Markdown: standardize line endings, collapse blank lines, and trim whitespace. */
 export function cleanMarkdown(text: string): string {
   if (!text) return '';
   return text
@@ -7,14 +7,15 @@ export function cleanMarkdown(text: string): string {
     .trim();
 }
 
-/** 转义表格单元格中的 `|`，并把换行压成空格，避免破坏表结构 */
+/** Escape `|` in table cells and replace newlines with spaces to preserve table structure. */
 export function escapeTableCell(value: string): string {
   return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
 }
 
 /**
- * 二维数组 → Markdown 表格（首行作表头，第二行输出 `| --- |` 分隔）。
- * 列数按所有行的最大列对齐，缺省单元格视为空串。
+ * Convert a two-dimensional array to a Markdown table (first row as the header,
+ * followed by a `| --- |` separator row).
+ * Align columns to the widest row and treat missing cells as empty strings.
  */
 export function toMarkdownTable(rows: string[][]): string {
   if (!rows.length) return '';
@@ -36,21 +37,21 @@ export function toMarkdownTable(rows: string[][]): string {
   return `${lines.join('\n')}\n\n`;
 }
 
-/** 取文件扩展名（小写，不含点）；无扩展名时返回空串 */
+/** Get the lowercase extension without the dot; return an empty string when absent. */
 export function getExtension(filename?: string | null): string {
   if (!filename || !filename.includes('.')) return '';
   return filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
 }
 
 /**
- * Multer/busboy 常把 multipart 文件名的 UTF-8 字节按 Latin-1 解码，
- * 导致中文变成「ç³è®º…」。按 Latin-1 取回原始字节再按 UTF-8 还原。
+ * Multer/busboy often decodes multipart UTF-8 filename bytes as Latin-1,
+ * producing mojibake. Recover the original bytes from Latin-1 and decode as UTF-8.
  */
 export function decodeUploadFilename(filename?: string | null): string {
   if (!filename) return '';
   try {
     const decoded = Buffer.from(filename, 'latin1').toString('utf8');
-    // 解码失败会出现替换字符，此时保留原值
+    // Keep the original value when decoding produces replacement characters.
     if (decoded.includes('\uFFFD')) return filename;
     return decoded;
   } catch {
@@ -58,9 +59,9 @@ export function decodeUploadFilename(filename?: string | null): string {
   }
 }
 
-/** 去掉扩展名作为文档标题；空文件名时返回「未命名文档」 */
+/** Remove the extension for a document title; use "Untitled document" for an empty filename. */
 export function titleFromFilename(filename?: string | null): string {
-  if (!filename) return '未命名文档';
+  if (!filename) return 'Untitled document';
   const idx = filename.lastIndexOf('.');
   return idx > 0 ? filename.slice(0, idx) : filename;
 }

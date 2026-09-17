@@ -1,11 +1,11 @@
 /**
- * 通用知识图谱抽取 Schema
+ * Generic knowledge graph extraction schema.
  *
  * @see docs/kg-extraction-schema.md
  */
 import { z } from 'zod';
 
-/** 核心 + 扩展实体类型 */
+/** Core and extended entity types. */
 export const KG_ENTITY_TYPES = [
   'PERSON',
   'ORGANIZATION',
@@ -21,7 +21,7 @@ export const KG_ENTITY_TYPES = [
 
 export type KgEntityType = (typeof KG_ENTITY_TYPES)[number];
 
-/** 实体间语义关系（Neo4j 边属性 relation；边类型仍为 RELATED_TO） */
+/** Semantic relations between entities (Neo4j edge property relation; edge type remains RELATED_TO). */
 export const KG_RELATION_TYPES = [
   'HAS_PART',
   'BELONGS_TO',
@@ -42,7 +42,7 @@ export type KgRelationType = (typeof KG_RELATION_TYPES)[number];
 const ENTITY_TYPE_SET = new Set<string>(KG_ENTITY_TYPES);
 const RELATION_TYPE_SET = new Set<string>(KG_RELATION_TYPES);
 
-/** 将 LLM 返回的类型规范到枚举，未知值走兜底 */
+/** Normalize an LLM type to the enum; unknown values use the fallback. */
 export function normalizeEntityType(
   raw: string | undefined | null,
 ): KgEntityType {
@@ -59,79 +59,96 @@ export function normalizeRelationType(
   return 'RELATED_TO';
 }
 
-/** LLM 结构化输出：实体 */
+/** Structured LLM output: entity. */
 export const kgExtractedEntitySchema = z.object({
-  name: z.string().describe('文中原文实体名'),
-  // string 而非 enum：模型常返回中文类型或额外字段，交给 normalizeEntityType 归类
-  type: z.string().describe('实体类型').optional(),
-  description: z.string().describe('简短描述，可空').optional(),
-  aliases: z.array(z.string()).describe('别名').optional(),
+  name: z.string().describe('Entity name as written in the source text'),
+  // Use string rather than enum because models may return localized or extra types; normalizeEntityType classifies them.
+  type: z.string().describe('Entity type').optional(),
+  description: z
+    .string()
+    .describe('Short description, may be empty')
+    .optional(),
+  aliases: z.array(z.string()).describe('Aliases').optional(),
 });
 
-/** LLM 结构化输出：关系 */
+/** Structured LLM output: relation. */
 export const kgExtractedRelationSchema = z.object({
-  source: z.string().describe('起点实体 name，必须是已抽取实体'),
-  target: z.string().describe('终点实体 name，必须是已抽取实体'),
-  // 用 string 而非 enum：模型常写 type 或自造类型（如 APPLIES_TO），整段 enum 校验失败会丢整块抽取
-  relation: z.string().describe('关系类型，字段名必须是 relation').optional(),
+  source: z
+    .string()
+    .describe('Source entity name; must be an extracted entity'),
+  target: z
+    .string()
+    .describe('Target entity name; must be an extracted entity'),
+  // Use string rather than enum because models may write type or invent a relation such as APPLIES_TO.
+  relation: z
+    .string()
+    .describe('Relation type; the field must be relation')
+    .optional(),
   type: z
     .string()
-    .describe('兼容：模型误把关系类型写成 type 时读取')
+    .describe(
+      'Compatibility field read when a model incorrectly puts the relation type in type',
+    )
     .optional(),
-  weight: z.number().min(0).max(1).describe('置信度 0-1').optional(),
+  weight: z
+    .number()
+    .min(0)
+    .max(1)
+    .describe('Confidence from 0 to 1')
+    .optional(),
 });
 
-/** LLM 结构化输出：单个 chunk 的抽取结果 */
+/** Structured LLM output: extraction result for one chunk. */
 export const kgExtractionResultSchema = z
   .object({
-    entities: z.array(kgExtractedEntitySchema).describe('实体列表'),
-    relations: z.array(kgExtractedRelationSchema).describe('关系列表'),
+    entities: z.array(kgExtractedEntitySchema).describe('Entity list'),
+    relations: z.array(kgExtractedRelationSchema).describe('Relation list'),
   })
-  .describe('从文档片段抽取的知识实体与关系');
+  .describe('Knowledge entities and relations extracted from a document chunk');
 
 export type KgExtractionLlmOutput = z.infer<typeof kgExtractionResultSchema>;
 
-/** 构建 LLM system prompt */
+/** Build the LLM system prompt. */
 export function buildExtractionSystemPrompt(
   maxEntities: number,
   maxRelations: number,
 ): string {
-  return `你是知识图谱构建专家。请严格从文档片段中抽取知识实体和关系。
+  return `You are an expert in building knowledge graphs. Extract knowledge entities and relations strictly from the document chunk.
 
-## 抽取规则
-1. 只抽取文中明确提到的、有实际意义的实体，不要臆测
-2. 不要抽取过于泛化的词（如「系统」「功能」「数据」「问题」）
-3. 实体名使用文中原文；别名放入 aliases
-4. 关系必须有文中依据（同句或相邻句），且 source/target 必须是已抽取实体的 name
-5. 每个片段最多 ${maxEntities} 个实体、${maxRelations} 个关系
-6. 无法归类时用实体类型 CONCEPT、关系类型 RELATED_TO
+## Extraction rules
+1. Extract only meaningful entities explicitly mentioned in the text; do not speculate.
+2. Do not extract overly generic words such as "system", "feature", "data", or "issue".
+3. Keep entity names as written in the source text; put alternate names in aliases.
+4. Every relation must be supported by the text (the same or an adjacent sentence), and source/target must be names of extracted entities.
+5. Extract at most ${maxEntities} entities and ${maxRelations} relations per chunk.
+6. Use entity type CONCEPT and relation type RELATED_TO when classification is uncertain.
 
-## 实体类型
-- PERSON: 人物、角色（如 张三、审核员）
-- ORGANIZATION: 组织、部门（如 研发中心、财务部）
-- CONCEPT: 术语、概念（如 分布式事务、试用期）
-- DOCUMENT: 文档、规范（如 《员工手册》）
-- PROCESS: 流程、活动（如 入职流程、发布流程）
-- PRODUCT: 产品、系统（如 知识库、CRM、Redis）
-- LOCATION: 地点（如 北京、会议室 A）
-- TIME: 时间、周期（如 2026-Q1、每周一）
-- POLICY: 政策、制度条款
-- RESOURCE: 文件、工具、设备（如 Docker、培训课件）
+## Entity types
+- PERSON: people or roles (for example, Alice or a reviewer)
+- ORGANIZATION: organizations or departments (for example, the Engineering Center or Finance Department)
+- CONCEPT: terms or concepts (for example, distributed transactions or a probation period)
+- DOCUMENT: documents or standards (for example, an employee handbook)
+- PROCESS: processes or activities (for example, onboarding or publication)
+- PRODUCT: products or systems (for example, a knowledge base, CRM, or Redis)
+- LOCATION: places (for example, Beijing or a meeting room)
+- TIME: times or periods (for example, 2026-Q1 or every Monday)
+- POLICY: policies or policy clauses
+- RESOURCE: files, tools, or equipment (for example, Docker or training materials)
 
-## 关系类型
-- HAS_PART: 组成、包含
-- BELONGS_TO: 归属
-- RELATED_TO: 泛关联（兜底）
-- DEFINES: 定义、解释
-- REQUIRES: 前置条件、依赖
-- USES: 使用
-- RESPONSIBLE_FOR: 负责
-- PARTICIPATES_IN: 参与
-- LOCATED_IN: 位于
-- OCCURS_AT: 发生于（时间）
-- CAUSES: 导致、因果
-- CONFLICTS_WITH: 冲突、例外
+## Relation types
+- HAS_PART: consists of or contains
+- BELONGS_TO: belongs to
+- RELATED_TO: generic relation (fallback)
+- DEFINES: defines or explains
+- REQUIRES: requires or depends on
+- USES: uses
+- RESPONSIBLE_FOR: responsible for
+- PARTICIPATES_IN: participates in
+- LOCATED_IN: located in
+- OCCURS_AT: occurs at a time
+- CAUSES: causes or leads to
+- CONFLICTS_WITH: conflicts with or is an exception to
 
-只返回 JSON，不要 markdown 或其它说明。关系对象的字段名是 relation（不要写成 type）。示例：
-{"entities":[{"name":"财务部","type":"ORGANIZATION","description":"","aliases":[]}],"relations":[{"source":"财务部","target":"差旅报销","relation":"RESPONSIBLE_FOR","weight":0.8}]}`;
+Return JSON only; do not include Markdown or other commentary. The relation object field must be relation, not type. Example:
+{"entities":[{"name":"Finance Department","type":"ORGANIZATION","description":"","aliases":[]}],"relations":[{"source":"Finance Department","target":"Travel Reimbursement","relation":"RESPONSIBLE_FOR","weight":0.8}]}`;
 }

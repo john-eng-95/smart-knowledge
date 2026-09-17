@@ -8,15 +8,15 @@ import { accessFromUser } from '../document/document-access';
 import type { AuthUser } from '../auth/auth-user.interface';
 
 /**
- * kh_chunk 混合检索：
- * 向量召回 + 关键词召回 → RRF 粗融合 → reranker 精排。
+ * Hybrid kh_chunk retrieval:
+ * vector retrieval + keyword retrieval -> RRF fusion -> reranker refinement.
  */
 @Injectable()
 export class HybridRetrievalService {
   private readonly logger = new Logger(HybridRetrievalService.name);
   private readonly hybridTopK: number;
   private readonly rrfC: number;
-  /** rerank relevance_score 下限（0–1）。 */
+  /** Minimum rerank relevance_score (0-1). */
   private readonly minScore: number;
 
   constructor(
@@ -48,7 +48,9 @@ export class HybridRetrievalService {
     });
 
     if (!fused.length) {
-      this.logger.log(`混合检索无结果：queryLength=${query.length}`);
+      this.logger.log(
+        `Hybrid retrieval returned no results: queryLength=${query.length}`,
+      );
       return [];
     }
 
@@ -60,7 +62,7 @@ export class HybridRetrievalService {
           : reranked;
       const top = kept.slice(0, topK);
       this.logger.log(
-        `检索过滤：rerank=${reranked.length}, minScore=${this.minScore}, ` +
+        `Retrieval filter: rerank=${reranked.length}, minScore=${this.minScore}, ` +
           `best=${reranked[0]?.score?.toFixed(3) ?? '-'}, kept=${kept.length}, return=${top.length}`,
       );
       return top;
@@ -74,7 +76,9 @@ export class HybridRetrievalService {
       return await this.embedding.embed(query);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`查询向量化失败，仅走关键词：${message}`);
+      this.logger.warn(
+        `Query embedding failed; using keyword retrieval only: ${message}`,
+      );
       return null;
     }
   }

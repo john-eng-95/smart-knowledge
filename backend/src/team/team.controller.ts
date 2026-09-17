@@ -39,7 +39,7 @@ export class TeamController {
   @RequirePermission('system:team')
   async delete(@Param('id') id: string) {
     await this.teamService.delete(id);
-    return { message: '删除成功' };
+    return { message: 'Deleted successfully' };
   }
 
   @Get('page')
@@ -49,7 +49,7 @@ export class TeamController {
     return this.teamService.page(query);
   }
 
-  /** 当前用户所在团队（含担任负责人的），登录即可 */
+  /** Teams accessible to the current user, including teams they lead. */
   @Get('mine')
   listMine(@CurrentUser() user: AuthUser) {
     return this.teamService.listMine(user.userId);

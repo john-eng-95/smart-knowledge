@@ -18,11 +18,11 @@ interface Props {
 }
 
 const CATEGORIES = [
-  { name: '文档', itemStyle: { color: '#1677ff' } },
-  { name: '知识点', itemStyle: { color: '#52c41a' } },
-  { name: '人物', itemStyle: { color: '#fa8c16' } },
-  { name: '组织', itemStyle: { color: '#13c2c2' } },
-  { name: '标签', itemStyle: { color: '#722ed1' } },
+  { name: 'Documents', itemStyle: { color: '#1677ff' } },
+  { name: 'Entities', itemStyle: { color: '#52c41a' } },
+  { name: 'People', itemStyle: { color: '#fa8c16' } },
+  { name: 'Organizations', itemStyle: { color: '#13c2c2' } },
+  { name: 'Tags', itemStyle: { color: '#722ed1' } },
 ] as const
 
 function categoryIndex(node: GraphViewNode) {
@@ -44,15 +44,15 @@ function shortName(name: string) {
 }
 
 function kindLabel(node: GraphViewNode) {
-  if (node.kind === 'document') return '文档'
-  if (node.kind === 'tag') return '标签'
-  if (node.type === 'PERSON') return '人物'
-  if (node.type === 'ORGANIZATION') return '组织'
-  return node.type || '知识点'
+  if (node.kind === 'document') return 'Document'
+  if (node.kind === 'tag') return 'Tag'
+  if (node.type === 'PERSON') return 'Person'
+  if (node.type === 'ORGANIZATION') return 'Organization'
+  return node.type || 'Entity'
 }
 
 function edgeLineStyle(kind: GraphViewEdge['kind']) {
-  // curveness: 边弯曲程度，避免多条边重叠成一条直线
+  // Curveness separates multiple edges that would otherwise overlap.
   if (kind === 'mentions') {
     return { color: '#1677ff', width: 1.8, type: 'solid' as const, curveness: 0.24, opacity: 0.9 }
   }
@@ -79,7 +79,7 @@ function bindHandle(chartRef: Props['chartRef'], chart: ECharts) {
     exportPng: () => {
       const url = chart.getDataURL({
         type: 'png',
-        pixelRatio: 2, // 导出倍率，2 比屏幕更清晰
+        pixelRatio: 2, // Export at 2x resolution for a sharper image.
         backgroundColor: '#fafafa',
       })
       const a = document.createElement('a')
@@ -100,15 +100,15 @@ function buildOption(nodes: GraphViewNode[], edges: GraphViewEdge[]): EChartsOpt
   return {
     backgroundColor: 'transparent',
     tooltip: {
-      trigger: 'item', // 悬停节点/边时出提示，不跟坐标轴
-      confine: true, // 提示框限制在图表内，避免被裁切
+      trigger: 'item', // Show tooltips for hovered nodes and edges, not axes.
+      confine: true, // Keep tooltips inside the chart bounds.
       formatter: (raw) => {
         const params = raw as {
           dataType?: string
           data?: { id?: string; name?: string; relation?: string }
         }
         if (params.dataType === 'edge') {
-          return `<div style="padding:4px 2px">${params.data?.relation || '关联'}</div>`
+          return `<div style="padding:4px 2px">${params.data?.relation || 'Related'}</div>`
         }
         const node = nodes.find((n) => n.id === params.data?.id)
         if (!node) return params.data?.name ?? ''
@@ -121,26 +121,26 @@ function buildOption(nodes: GraphViewNode[], edges: GraphViewEdge[]): EChartsOpt
     series: [
       {
         type: 'graph',
-        layout: 'force', // 力导向：节点互相排斥、边拉近，自动铺开
-        roam: true, // 允许滚轮缩放、拖动画布
-        roamTrigger: 'global', // 空白处也能拖拽平移
-        draggable: true, // 节点可拖拽
-        zoom: 1, // 初始缩放
-        scaleLimit: { min: 0.25, max: 4 }, // 缩放上下限
+        layout: 'force', // Force layout repels nodes and pulls connected edges together.
+        roam: true, // Allow wheel zooming and canvas panning.
+        roamTrigger: 'global', // Allow panning from empty canvas space.
+        draggable: true, // Allow nodes to be dragged.
+        zoom: 1, // Initial zoom level.
+        scaleLimit: { min: 0.25, max: 4 }, // Zoom limits.
         left: 40,
         right: 40,
         top: 24,
-        bottom: 48, // 四周留白，给图例/缩放按钮腾位置
-        categories: [...CATEGORIES], // 图例分类，决定节点颜色
+        bottom: 48, // Leave room for the legend and zoom controls.
+        categories: [...CATEGORIES], // Legend categories determine node colors.
         data: nodes.map((node) => ({
           id: node.id,
           name: node.name,
           category: categoryIndex(node),
-          symbolSize: symbolSize(node, degree.get(node.id) ?? 1), // 节点圆点大小
+          symbolSize: symbolSize(node, degree.get(node.id) ?? 1), // Node size.
           label: {
             show: true,
             position: 'bottom' as const,
-            distance: 8, // 文字离节点的间距
+            distance: 8, // Gap between labels and nodes.
             color: '#434343',
             fontSize: node.kind === 'document' ? 12 : 11,
             fontWeight: node.kind === 'document' ? 600 : 400,
@@ -151,33 +151,33 @@ function buildOption(nodes: GraphViewNode[], edges: GraphViewEdge[]): EChartsOpt
           source: edge.source,
           target: edge.target,
           relation: edge.relation,
-          silent: true, // 边不响应点击/悬停高亮，避免挡节点
+          silent: true, // Keep edges from intercepting clicks or hover highlights.
           lineStyle: edgeLineStyle(edge.kind),
         })),
         force: {
-          repulsion: 160, // 节点互斥力，越大越散
-          gravity: 0.1, // 向中心聚拢，防止飞出画布
-          edgeLength: 70, // 理想边长
-          friction: 0.5, // 阻尼，越大停得越快
-          layoutAnimation: false, // 关掉入场动画，大数据更稳
+          repulsion: 160, // Node repulsion; higher values spread nodes farther apart.
+          gravity: 0.1, // Pull nodes toward the center.
+          edgeLength: 70, // Ideal edge length.
+          friction: 0.5, // Damping; higher values settle faster.
+          layoutAnimation: false, // Disable entry animation for large graphs.
         },
-        labelLayout: { hideOverlap: true, moveOverlap: 'shiftY' }, // 重叠标签隐藏或纵向错开
+        labelLayout: { hideOverlap: true, moveOverlap: 'shiftY' }, // Hide or vertically shift overlapping labels.
         lineStyle: { opacity: 0.9 },
         emphasis: {
-          focus: 'adjacency', // 高亮当前节点及其相邻边/点
-          scale: 1.12, // 悬停时节点略放大
+          focus: 'adjacency', // Highlight the selected node and adjacent edges/nodes.
+          scale: 1.12, // Slightly enlarge nodes on hover.
           lineStyle: { width: 2.6 },
           label: { fontWeight: 700 },
         },
         blur: {
-          // focus=adjacency 时，非相邻元素走这里，压暗背景
+          // Dim non-adjacent elements when focus is set to adjacency.
           itemStyle: { opacity: 0.2 },
           lineStyle: { opacity: 0.08 },
           label: { opacity: 0.15 },
         },
-        edgeSymbol: ['none', 'arrow'], // 起点无标记，终点画箭头
+        edgeSymbol: ['none', 'arrow'], // No marker at the start; draw an arrow at the end.
         edgeSymbolSize: [0, 8],
-        edgeLabel: { show: false }, // 边上不写字，关系名放 tooltip
+        edgeLabel: { show: false }, // Keep relation names in tooltips instead of on edges.
       },
     ],
   }
@@ -245,15 +245,15 @@ export function EntityTypePie({ items }: PieProps) {
     const chart = echarts.init(el)
     const data = items.length
       ? items.map((item) => ({ name: item.type, value: item.count }))
-      : [{ name: '暂无', value: 0 }]
+      : [{ name: 'No data', value: 0 }]
     chart.setOption({
       tooltip: { trigger: 'item' },
       series: [
         {
           type: 'pie',
-          radius: ['42%', '68%'], // 内外半径，做成环形图
+          radius: ['42%', '68%'], // Inner and outer radii for the donut chart.
           center: ['50%', '50%'],
-          avoidLabelOverlap: true, // 标签自动错开
+          avoidLabelOverlap: true, // Automatically separate overlapping labels.
           itemStyle: { borderColor: '#fff', borderWidth: 2 },
           label: { fontSize: 11, color: '#595959' },
           data,

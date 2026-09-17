@@ -20,10 +20,10 @@ import {
 import { RabbitMqService } from './rabbitmq.service';
 
 /**
- * 文档发布后的知识管线「生产者」
+ * Producer for the post-publication knowledge pipeline.
  *
- * <p>触发：RAG 向量化 + Search 全文索引 + KG 建图。</p>
- * <p>约定：投递失败只打日志，<b>不回滚</b>文档已发布状态。</p>
+ * <p>Triggers RAG vectorization, full-text search indexing, and KG construction.</p>
+ * <p>Delivery failures are logged and do not roll back the published document state.</p>
  */
 @Injectable()
 export class DocumentPipelinePublisher {
@@ -31,7 +31,7 @@ export class DocumentPipelinePublisher {
 
   constructor(private readonly rabbit: RabbitMqService) {}
 
-  /** 发布成功后调用：并行投递 RAG / Search / KG。 */
+  /** Called after publication succeeds; publishes RAG, Search, and KG tasks in parallel. */
   async afterPublish(document: DocumentEntity) {
     await Promise.all([
       this.triggerRagReindex(document.id),
@@ -40,7 +40,7 @@ export class DocumentPipelinePublisher {
     ]);
   }
 
-  /** 归档/删除后：通知 RAG / Search / KG 按文档 ID 清理 */
+  /** After archiving/deletion, notify RAG, Search, and KG to clean up by document ID. */
   async afterUnpublish(documentId: string) {
     await Promise.all([
       this.triggerRagDelete(documentId),
@@ -49,7 +49,7 @@ export class DocumentPipelinePublisher {
     ]);
   }
 
-  /** RAG：按文档 ID 重建向量块 */
+  /** Rebuild vector chunks for a document in RAG. */
   private async triggerRagReindex(documentId: string) {
     const message: ReindexMessage = {
       taskId: randomUUID(),
@@ -62,7 +62,7 @@ export class DocumentPipelinePublisher {
       message,
     );
     this.logger.log(
-      `RAG 重建索引${ok ? '已投递' : '投递失败'}：documentId=${documentId}, taskId=${message.taskId}`,
+      `RAG reindex ${ok ? 'published' : 'failed'}: documentId=${documentId}, taskId=${message.taskId}`,
     );
   }
 
@@ -76,8 +76,8 @@ export class DocumentPipelinePublisher {
   }
 
   /**
-   * Search：只投 documentId。消费者从 Postgres + Mongo 拉全文再写 ES，
-   * 避免 MQ 塞正文、也不再截断前 1000 字。
+   * Search publishes only the documentId. The consumer loads the full text from
+   * PostgreSQL and MongoDB before writing to ES, avoiding large MQ payloads.
    */
   private async triggerSearchIndex(documentId: string) {
     const message: SearchIndexMessage = {
@@ -91,7 +91,7 @@ export class DocumentPipelinePublisher {
       message,
     );
     this.logger.log(
-      `ES 搜索索引${ok ? '已投递' : '投递失败'}：documentId=${documentId}, taskId=${message.taskId}`,
+      `ES search index ${ok ? 'published' : 'failed'}: documentId=${documentId}, taskId=${message.taskId}`,
     );
   }
 
@@ -104,7 +104,7 @@ export class DocumentPipelinePublisher {
     await this.rabbit.publish(SEARCH_INDEX_EXCHANGE, SEARCH_RK_DELETE, message);
   }
 
-  /** KG：按文档 ID 建图谱 */
+  /** Build the knowledge graph for a document. */
   private async triggerKgBuild(documentId: string) {
     const message: KgBuildMessage = {
       taskId: randomUUID(),
@@ -117,7 +117,7 @@ export class DocumentPipelinePublisher {
       message,
     );
     this.logger.log(
-      `KG 建图${ok ? '已投递' : '投递失败'}：documentId=${documentId}, taskId=${message.taskId}`,
+      `KG build ${ok ? 'published' : 'failed'}: documentId=${documentId}, taskId=${message.taskId}`,
     );
   }
 

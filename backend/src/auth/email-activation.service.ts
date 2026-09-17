@@ -6,7 +6,7 @@ const TOKEN_PREFIX = 'email:activation:token:';
 const USER_PREFIX = 'email:activation:user:';
 export const ACTIVATION_TOKEN_TTL_SECONDS = 24 * 3600;
 
-/** 邮箱激活令牌（Redis 存储，24 小时有效） */
+/** Email activation token stored in Redis for 24 hours. */
 @Injectable()
 export class EmailActivationService {
   constructor(private readonly redis: RedisService) {}
@@ -26,13 +26,13 @@ export class EmailActivationService {
     }
 
     const token = randomBytes(32).toString('hex');
-    // token → userId：用户点激活链接时，用 token 查出要激活的账号
+    // token -> userId: resolve the account when the user opens the activation link.
     await this.redis.set(
       this.tokenKey(token),
       userId,
       ACTIVATION_TOKEN_TTL_SECONDS,
     );
-    // userId → token：同一用户只保留一个有效 token，重发时先按 userId 找到并作废旧的
+    // userId -> token: keep one active token per user and revoke the old one on resend.
     await this.redis.set(
       this.userKey(userId),
       token,
@@ -41,7 +41,7 @@ export class EmailActivationService {
     return token;
   }
 
-  /** 校验并消费 token，返回 userId */
+  /** Validate and consume a token, returning the userId. */
   async consumeToken(token: string): Promise<string | null> {
     const userId = await this.redis.get(this.tokenKey(token));
     if (!userId) return null;

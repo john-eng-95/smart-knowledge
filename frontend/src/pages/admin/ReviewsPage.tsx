@@ -24,7 +24,7 @@ export default function ReviewsPage() {
       setTotal(res.total)
       setPage(nextPage)
     } catch (error) {
-      message.error(error instanceof ApiError ? error.message : '加载失败')
+      message.error(error instanceof ApiError ? error.message : 'Failed to load review tasks')
     } finally {
       setLoading(false)
     }
@@ -42,12 +42,12 @@ export default function ReviewsPage() {
           style={{ width: 160 }}
           onChange={setStatus}
           options={[
-            { value: 'pending', label: '待审' },
-            { value: 'approved', label: '已通过' },
-            { value: 'rejected', label: '已驳回' },
+            { value: 'pending', label: 'Pending' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'rejected', label: 'Rejected' },
           ]}
         />
-        <Button onClick={() => void load(1)}>刷新</Button>
+        <Button onClick={() => void load(1)}>Refresh</Button>
       </Space>
       <Table
         rowKey="id"
@@ -56,20 +56,20 @@ export default function ReviewsPage() {
         pagination={{ current: page, pageSize: 10, total, onChange: (p) => void load(p) }}
         columns={[
           {
-            title: '文档',
+            title: 'Document',
             dataIndex: 'documentId',
             render: (id: string) => <Link to={`/documents/${id}`}>{id}</Link>,
           },
           {
-            title: '结果',
+            title: 'Result',
             dataIndex: 'reviewResult',
             render: (v: number | null) =>
-              v == null ? <Tag>待审</Tag> : v === 1 ? <Tag color="success">通过</Tag> : <Tag color="error">驳回</Tag>,
+              v == null ? <Tag>Pending</Tag> : v === 1 ? <Tag color="success">Approved</Tag> : <Tag color="error">Rejected</Tag>,
           },
-          { title: '意见', dataIndex: 'reviewComment' },
-          { title: '提交时间', dataIndex: 'createdAt', render: formatTime },
+          { title: 'Comment', dataIndex: 'reviewComment' },
+          { title: 'Submitted', dataIndex: 'createdAt', render: formatTime },
           {
-            title: '操作',
+            title: 'Actions',
             render: (_: unknown, row: ReviewTask) =>
               row.reviewResult == null ? (
                 <Space>
@@ -77,10 +77,10 @@ export default function ReviewsPage() {
                     onClick={() => {
                       setTask(row)
                       setAction('approve')
-                      setComment('内容符合规范，准予发布')
+                      setComment('The content meets the requirements and is approved for publication.')
                     }}
                   >
-                    通过
+                    Approve
                   </a>
                   <a
                     onClick={() => {
@@ -89,7 +89,7 @@ export default function ReviewsPage() {
                       setComment('')
                     }}
                   >
-                    驳回
+                    Reject
                   </a>
                 </Space>
               ) : (
@@ -99,7 +99,7 @@ export default function ReviewsPage() {
         ]}
       />
       <Modal
-        title={action === 'approve' ? '审核通过' : '审核驳回'}
+        title={action === 'approve' ? 'Approve review' : 'Reject review'}
         open={Boolean(task)}
         onCancel={() => setTask(null)}
         onOk={async () => {
@@ -109,16 +109,16 @@ export default function ReviewsPage() {
               await documentApi.approve(task.id, comment || undefined)
             } else {
               if (!comment.trim()) {
-                message.error('驳回必须填写意见')
+                message.error('A comment is required when rejecting a document')
                 return
               }
               await documentApi.reject(task.id, comment.trim())
             }
-            message.success('已提交')
+            message.success('Submitted')
             setTask(null)
             void load()
           } catch (error) {
-            message.error(error instanceof ApiError ? error.message : '操作失败')
+            message.error(error instanceof ApiError ? error.message : 'Operation failed')
           }
         }}
       >

@@ -8,19 +8,19 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-/** RAG 对话请求 */
+/** RAG chat request. */
 export class ChatDto {
-  /** 已有会话；不传则新建 */
+  /** Existing session; a new one is created when omitted. */
   @IsOptional()
   @IsString()
   sessionId?: string;
 
-  /** 用户问题 */
+  /** User question. */
   @IsString()
   @IsNotEmpty()
   content: string;
 
-  /** 召回块数，默认 5 */
+  /** Number of chunks to retrieve; defaults to 5. */
   @IsOptional()
   @Type(() => Number)
   @IsInt()

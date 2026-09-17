@@ -1,7 +1,7 @@
 /**
- * 将 TXT / MD 解析为文本。
+ * Parse TXT / MD files as text.
  *
- * 不做结构转换：按 UTF-8 原样读出，后续由调用方直接当作 Markdown/纯文本使用。
+ * No structural conversion is performed; read UTF-8 as-is for callers to use as Markdown/plain text.
  */
 export function parsePlainText(buffer: Buffer): string {
   return buffer.toString('utf8');

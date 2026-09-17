@@ -25,16 +25,16 @@ export default function ProfilePage() {
     <div className="kh-page">
       <Row gutter={16}>
         <Col span={8}>
-          <Statistic title="我的文档" value={stats?.documentCount ?? 0} />
+          <Statistic title="My documents" value={stats?.documentCount ?? 0} />
         </Col>
         <Col span={8}>
-          <Statistic title="浏览" value={stats?.viewCount ?? 0} />
+          <Statistic title="Views" value={stats?.viewCount ?? 0} />
         </Col>
         <Col span={8}>
-          <Statistic title="点赞" value={stats?.likeCount ?? 0} />
+          <Statistic title="Likes" value={stats?.likeCount ?? 0} />
         </Col>
       </Row>
-      <Card title="资料" style={{ marginTop: 24 }}>
+      <Card title="Profile" style={{ marginTop: 24 }}>
         <Form
           form={profileForm}
           layout="vertical"
@@ -45,16 +45,16 @@ export default function ProfilePage() {
               if (user) {
                 updateUser({ ...user, realName: values.realName, email: values.email })
               }
-              message.success('已更新')
+              message.success('Updated')
             } catch (error) {
-              message.error(error instanceof ApiError ? error.message : '更新失败')
+              message.error(error instanceof ApiError ? error.message : 'Update failed')
             }
           }}
         >
-          <Form.Item label="用户名">
+          <Form.Item label="Username">
             <Input disabled value={user?.username} />
           </Form.Item>
-          <Form.Item label="所在团队">
+          <Form.Item label="Teams">
             {teams.length ? (
               <div>
                 {teams.map((team) => (
@@ -62,21 +62,21 @@ export default function ProfilePage() {
                 ))}
               </div>
             ) : (
-              <span style={{ color: '#8c8c8c' }}>暂未加入团队</span>
+              <span style={{ color: '#8c8c8c' }}>Not a member of any team</span>
             )}
           </Form.Item>
-          <Form.Item name="realName" label="姓名">
+          <Form.Item name="realName" label="Name">
             <Input />
           </Form.Item>
-          <Form.Item name="email" label="邮箱">
+          <Form.Item name="email" label="Email">
             <Input />
           </Form.Item>
           <Button type="primary" htmlType="submit">
-            保存资料
+            Save profile
           </Button>
         </Form>
       </Card>
-      <Card title="修改密码" style={{ marginTop: 16 }}>
+      <Card title="Change password" style={{ marginTop: 16 }}>
         <Form
           form={pwdForm}
           layout="vertical"
@@ -84,21 +84,21 @@ export default function ProfilePage() {
           onFinish={async (values: { oldPassword: string; newPassword: string }) => {
             try {
               await userApi.changePassword(values.oldPassword, values.newPassword)
-              message.success('密码已修改')
+              message.success('Password changed')
               pwdForm.resetFields()
             } catch (error) {
-              message.error(error instanceof ApiError ? error.message : '修改失败')
+              message.error(error instanceof ApiError ? error.message : 'Change failed')
             }
           }}
         >
-          <Form.Item name="oldPassword" label="原密码" rules={[{ required: true }]}>
+          <Form.Item name="oldPassword" label="Current password" rules={[{ required: true }]}>
             <Input.Password />
           </Form.Item>
-          <Form.Item name="newPassword" label="新密码" rules={[{ required: true, min: 6 }]}>
+          <Form.Item name="newPassword" label="New password" rules={[{ required: true, min: 6 }]}>
             <Input.Password />
           </Form.Item>
           <Button type="primary" htmlType="submit">
-            修改密码
+            Change password
           </Button>
         </Form>
       </Card>

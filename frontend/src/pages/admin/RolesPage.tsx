@@ -24,7 +24,7 @@ export default function RolesPage() {
     try {
       setItems(await roleApi.list())
     } catch (error) {
-      message.error(error instanceof ApiError ? error.message : '加载失败')
+      message.error(error instanceof ApiError ? error.message : 'Failed to load roles')
     }
   }
 
@@ -36,17 +36,17 @@ export default function RolesPage() {
   return (
     <div className="kh-page">
       <Button type="primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>
-        新建角色
+        New role
       </Button>
       <Table
         rowKey="id"
         dataSource={items}
         columns={[
-          { title: '名称', dataIndex: 'roleName' },
-          { title: '编码', dataIndex: 'roleCode' },
-          { title: '说明', dataIndex: 'description' },
+          { title: 'Name', dataIndex: 'roleName' },
+          { title: 'Code', dataIndex: 'roleCode' },
+          { title: 'Description', dataIndex: 'description' },
           {
-            title: '操作',
+            title: 'Actions',
             render: (_: unknown, row: RoleItem) => (
               <a
                 onClick={async () => {
@@ -55,18 +55,18 @@ export default function RolesPage() {
                     const res = await roleApi.permissions(row.id)
                     setChecked(res.permissionIds)
                   } catch (error) {
-                    message.error(error instanceof ApiError ? error.message : '读取权限失败')
+                    message.error(error instanceof ApiError ? error.message : 'Failed to load permissions')
                   }
                 }}
               >
-                权限
+                Permissions
               </a>
             ),
           },
         ]}
       />
       <Modal
-        title="新建角色"
+        title="New role"
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => form.submit()}
@@ -77,38 +77,38 @@ export default function RolesPage() {
           onFinish={async (values: { roleName: string; roleCode: string; description?: string }) => {
             try {
               await roleApi.create(values)
-              message.success('已创建')
+              message.success('Created')
               setCreateOpen(false)
               form.resetFields()
               void load()
             } catch (error) {
-              message.error(error instanceof ApiError ? error.message : '创建失败')
+              message.error(error instanceof ApiError ? error.message : 'Creation failed')
             }
           }}
         >
-          <Form.Item name="roleName" label="名称" rules={[{ required: true }]}>
+          <Form.Item name="roleName" label="Name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="roleCode" label="编码" rules={[{ required: true }]}>
-            <Input placeholder="如 ROLE_EDITOR" />
+          <Form.Item name="roleCode" label="Code" rules={[{ required: true }]}>
+            <Input placeholder="e.g. ROLE_EDITOR" />
           </Form.Item>
-          <Form.Item name="description" label="说明">
+          <Form.Item name="description" label="Description">
             <Input />
           </Form.Item>
         </Form>
       </Modal>
       <Modal
-        title={permRole ? `权限：${permRole.roleName}` : '权限'}
+        title={permRole ? `Permissions: ${permRole.roleName}` : 'Permissions'}
         open={Boolean(permRole)}
         onCancel={() => setPermRole(null)}
         onOk={async () => {
           if (!permRole) return
           try {
             await roleApi.assignPermissions(permRole.id, checked)
-            message.success('已保存')
+            message.success('Saved')
             setPermRole(null)
           } catch (error) {
-            message.error(error instanceof ApiError ? error.message : '保存失败')
+            message.error(error instanceof ApiError ? error.message : 'Save failed')
           }
         }}
         width={560}

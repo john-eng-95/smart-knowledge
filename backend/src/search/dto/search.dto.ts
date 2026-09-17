@@ -8,7 +8,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-/** 全文搜索请求 */
+/** Full-text search request. */
 export class SearchDocumentsDto {
   @IsString()
   @IsNotEmpty()

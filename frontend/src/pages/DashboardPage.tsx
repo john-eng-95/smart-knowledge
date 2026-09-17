@@ -34,22 +34,22 @@ export default function DashboardPage() {
       <Row gutter={16}>
         <Col span={6}>
           <Card>
-            <Statistic title="我的文档" value={stats?.documentCount ?? 0} />
+            <Statistic title="My documents" value={stats?.documentCount ?? 0} />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="浏览合计" value={stats?.viewCount ?? 0} />
+            <Statistic title="Total views" value={stats?.viewCount ?? 0} />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="点赞合计" value={stats?.likeCount ?? 0} />
+            <Statistic title="Total likes" value={stats?.likeCount ?? 0} />
           </Card>
         </Col>
         <Col span={6}>
           <Card>
-            <Statistic title="评论合计" value={stats?.commentCount ?? 0} />
+            <Statistic title="Total comments" value={stats?.commentCount ?? 0} />
           </Card>
         </Col>
       </Row>
@@ -57,7 +57,7 @@ export default function DashboardPage() {
         {can(user, 'document:list') ? (
           <Col span={6}>
             <Card hoverable onClick={() => navigate('/documents')}>
-              <FileTextOutlined style={{ color: '#1677ff', fontSize: 20 }} /> 文档管理
+              <FileTextOutlined style={{ color: '#1677ff', fontSize: 20 }} /> Documents
             </Card>
           </Col>
         ) : null}
@@ -65,24 +65,24 @@ export default function DashboardPage() {
           <>
             <Col span={6}>
               <Card hoverable onClick={() => navigate('/search')}>
-                <SearchOutlined style={{ color: '#1677ff', fontSize: 20 }} /> 文档搜索
+                <SearchOutlined style={{ color: '#1677ff', fontSize: 20 }} /> Search
               </Card>
             </Col>
             <Col span={6}>
               <Card hoverable onClick={() => navigate('/chat')}>
-                <MessageOutlined style={{ color: '#1677ff', fontSize: 20 }} /> AI 问答
+                <MessageOutlined style={{ color: '#1677ff', fontSize: 20 }} /> AI chat
               </Card>
             </Col>
             <Col span={6}>
               <Card hoverable onClick={() => navigate('/graph')}>
-                <ClusterOutlined style={{ color: '#1677ff', fontSize: 20 }} /> 知识图谱
+                <ClusterOutlined style={{ color: '#1677ff', fontSize: 20 }} /> Knowledge graph
               </Card>
             </Col>
           </>
         ) : null}
       </Row>
       <div className="kh-page" style={{ marginTop: 16, minHeight: 0 }}>
-        <h3 style={{ marginTop: 0 }}>最近可见文档</h3>
+        <h3 style={{ marginTop: 0 }}>Recently updated visible documents</h3>
         <Table
           rowKey="id"
           size="middle"
@@ -90,7 +90,7 @@ export default function DashboardPage() {
           dataSource={docs}
           columns={[
             {
-              title: '标题',
+              title: 'Title',
               dataIndex: 'title',
               render: (title: string, row: DocumentItem) => (
                 <a
@@ -103,7 +103,7 @@ export default function DashboardPage() {
               ),
             },
             {
-              title: '状态',
+              title: 'Status',
               dataIndex: 'status',
               width: 100,
               render: (status: number) => (
@@ -111,14 +111,14 @@ export default function DashboardPage() {
               ),
             },
             {
-              title: '可见性',
+              title: 'Visibility',
               width: 110,
               render: (_: unknown, row: DocumentItem) => {
                 const vis = visibilityMeta(row)
                 return <Tag color={vis.color}>{vis.label}</Tag>
               },
             },
-            { title: '更新时间', dataIndex: 'updatedAt', render: formatTime },
+            { title: 'Updated', dataIndex: 'updatedAt', render: formatTime },
           ]}
         />
       </div>

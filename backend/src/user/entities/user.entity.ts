@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { bigintTransformer } from '../../common/transformers/bigint.transformer';
 
-/** 用户（PostgreSQL kh_user） */
+/** User entity (PostgreSQL kh_user). */
 @Entity('kh_user')
 export class UserEntity {
   @PrimaryColumn({ type: 'bigint', transformer: bigintTransformer })
@@ -28,11 +28,11 @@ export class UserEntity {
   @Column({ type: 'varchar', length: 500, nullable: true })
   avatar?: string | null;
 
-  /** 0 未验证 1 已验证 */
+  /** 0 = unverified, 1 = verified. */
   @Column({ name: 'email_verified', type: 'smallint', default: 1 })
   emailVerified: number;
 
-  /** 0 禁用 1 启用 */
+  /** 0 = disabled, 1 = enabled. */
   @Column({ type: 'smallint', default: 1 })
   status: number;
 

@@ -19,14 +19,14 @@ import { VectorIndexService } from './vector-index.service';
 import { PipelineDocument } from './types/pipeline.types';
 
 /**
- * 发布后知识管线编排器
+ * Post-publication knowledge pipeline orchestrator.
  *
- * <p>RAG：分块 → Embedding → ES kh_chunk</p>
- * <p>Search：Mongo 全文 → ES kh_document</p>
- * <p>KG：分块 → 抽实体关系 → Neo4j</p>
+ * <p>RAG: chunking -> embedding -> ES kh_chunk.</p>
+ * <p>Search: Mongo full text -> ES kh_document.</p>
+ * <p>KG: chunking -> entity/relation extraction -> Neo4j.</p>
  *
- * <p>由 {@link DocumentPipelineConsumer} 在消费到 MQ 消息后调用；</p>
- * <p>本类负责「加载文档 → 调具体服务」，不直接碰 RabbitMQ。</p>
+ * <p>Called by {@link DocumentPipelineConsumer} after consuming an MQ message.</p>
+ * <p>This class loads documents and delegates to services; it does not access RabbitMQ directly.</p>
  */
 @Injectable()
 export class PipelineOrchestrator {
@@ -45,9 +45,9 @@ export class PipelineOrchestrator {
   ) {}
 
   /**
-   * 处理 RAG 重建 / 删除消息。
+   * Handle RAG rebuild/delete messages.
    *
-   * 重建流水线（单文档）：清旧块 → Chunking → Embedding → 写入 ES kh_chunk
+   * Rebuild one document: clear old chunks -> chunk -> embed -> write ES kh_chunk.
    */
   async handleRagReindex(type: string, documentIds?: string[]) {
     if (type === 'DELETE_BY_DOC_IDS' && documentIds?.length) {
@@ -58,26 +58,28 @@ export class PipelineOrchestrator {
     }
 
     if (type !== 'BY_DOC_IDS' || !documentIds?.length) {
-      this.logger.warn(`忽略未支持的 RAG 消息：type=${type}`);
+      this.logger.warn(`Ignoring unsupported RAG message: type=${type}`);
       return;
     }
 
     const docs = await this.loadDocumentsByIds(documentIds);
-    this.logger.log(`RAG 开始索引：type=${type}, total=${docs.length}`);
+    this.logger.log(`RAG indexing started: type=${type}, total=${docs.length}`);
 
     for (const doc of docs) {
       try {
         await this.reindexOne(doc);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.error(`RAG 索引失败：documentId=${doc.id}, ${message}`);
+        this.logger.error(
+          `RAG indexing failed: documentId=${doc.id}, ${message}`,
+        );
       }
     }
   }
 
   /**
-   * 已发布文档改公开/所属团队：只同步三套索引上的可见性字段，
-   * 不重跑 embedding / 抽实体。
+   * Update visibility for a published document by synchronizing all three indexes.
+   * Do not rerun embedding or entity extraction.
    */
   async updateVisibility(doc: DocumentEntity) {
     const vis = {
@@ -86,7 +88,7 @@ export class PipelineOrchestrator {
       authorId: doc.authorId ?? null,
     };
     this.logger.log(
-      `同步可见性：documentId=${doc.id}, isPublic=${vis.isPublic}, teamId=${vis.teamId ?? '-'}`,
+      `Synchronizing visibility: documentId=${doc.id}, isPublic=${vis.isPublic}, teamId=${vis.teamId ?? '-'}`,
     );
     await Promise.all([
       this.searchIndexService.updateVisibility(doc.id, vis),
@@ -96,9 +98,9 @@ export class PipelineOrchestrator {
   }
 
   /**
-   * 处理 Search 索引消息。
-   * INDEX：按 documentId 从 Postgres + Mongo 拉全文，写入 ES kh_document。
-   * DELETE：按 documentId 删除。
+   * Handle Search index messages.
+   * INDEX: load full text from Postgres + Mongo by documentId and write ES kh_document.
+   * DELETE: delete by documentId.
    */
   async handleSearchIndex(type: string, documentId: string) {
     if (type === 'DELETE') {
@@ -110,20 +112,22 @@ export class PipelineOrchestrator {
       const docs = await this.loadDocumentsByIds([documentId]);
       const doc = docs[0];
       if (!doc) {
-        this.logger.warn(`Search INDEX 文档不存在：documentId=${documentId}`);
+        this.logger.warn(
+          `Search INDEX document not found: documentId=${documentId}`,
+        );
         return;
       }
       await this.searchIndexService.indexDocument(this.toSearchIndexDoc(doc));
       return;
     }
 
-    this.logger.warn(`忽略未支持的 Search 消息：type=${type}`);
+    this.logger.warn(`Ignoring unsupported Search message: type=${type}`);
   }
 
   /**
-   * 处理 KG 建图消息。
-   * BUILD_*：读正文 → 分块 → 抽实体关系 → 写 Neo4j
-   * DELETE_*：删文档节点及其 chunk / 孤儿实体
+   * Handle KG build messages.
+   * BUILD_*: read content -> chunk -> extract entities/relations -> write Neo4j.
+   * DELETE_*: delete document nodes, chunks, and orphan entities.
    */
   async handleKgBuild(type: string, documentIds?: string[]) {
     if (type === 'DELETE_BY_DOC_IDS' && documentIds?.length) {
@@ -141,22 +145,28 @@ export class PipelineOrchestrator {
           : [];
 
     if (!docs.length) {
-      this.logger.warn(`忽略未支持或空的 KG 消息：type=${type}`);
+      this.logger.warn(
+        `Ignoring unsupported or empty KG message: type=${type}`,
+      );
       return;
     }
 
-    this.logger.log(`KG 开始建图：type=${type}, total=${docs.length}`);
+    this.logger.log(
+      `KG graph build started: type=${type}, total=${docs.length}`,
+    );
     await this.graphBuildService.buildBatch(docs);
   }
 
-  /** 单篇：分块 → 批量嵌入 → 落库 */
+  /** One document: chunk -> batch embed -> persist. */
   private async reindexOne(doc: PipelineDocument) {
     if (!doc.content?.trim()) {
-      this.logger.warn(`文档内容为空，跳过 RAG：documentId=${doc.id}`);
+      this.logger.warn(
+        `Document content is empty; skipping RAG: documentId=${doc.id}`,
+      );
       return;
     }
 
-    // 先清旧块，避免重复发布时脏数据残留
+    // Clear old chunks first so repeated publication does not leave stale data.
     await this.vectorIndexService.deleteByDocId(doc.id);
 
     const chunks = await this.chunkingService.chunk({
@@ -182,11 +192,11 @@ export class PipelineOrchestrator {
 
     await this.vectorIndexService.indexChunks(chunks);
     this.logger.log(
-      `RAG 索引完成：documentId=${doc.id}, chunks=${chunks.length}`,
+      `RAG indexing completed: documentId=${doc.id}, chunks=${chunks.length}`,
     );
   }
 
-  /** ES date 字段需要 ISO-8601；Date#toString() 会被拒绝 */
+  /** ES date fields require ISO-8601; Date#toString() is rejected. */
   private toIsoDate(value?: Date | string | null): string | null {
     if (value == null) return null;
     if (value instanceof Date) {
@@ -196,7 +206,7 @@ export class PipelineOrchestrator {
     return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
   }
 
-  /** 按 ID 列表加载元数据 + Mongo 正文 */
+  /** Load metadata and Mongo content by ID list. */
   private async loadDocumentsByIds(ids: string[]): Promise<PipelineDocument[]> {
     const result: PipelineDocument[] = [];
     for (const id of ids) {
@@ -212,7 +222,7 @@ export class PipelineOrchestrator {
     return result;
   }
 
-  /** 加载全部已发布且未删除的文档（BUILD_ALL） */
+  /** Load all published, non-deleted documents (BUILD_ALL). */
   private async loadAllPublishedDocuments(): Promise<PipelineDocument[]> {
     const docs = await this.em.find(DocumentEntity, {
       where: { deleted: false, status: DocumentStatus.Published },
@@ -227,7 +237,7 @@ export class PipelineOrchestrator {
     return result;
   }
 
-  /** Postgres 元数据 + Mongo 全文 → ES kh_document 文档 */
+  /** Convert Postgres metadata and Mongo full text into an ES kh_document record. */
   private toSearchIndexDoc(doc: PipelineDocument): Record<string, unknown> {
     return {
       id: doc.id,
@@ -249,7 +259,7 @@ export class PipelineOrchestrator {
     };
   }
 
-  /** Postgres 实体 + Mongo 正文 → 管线统一 DTO */
+  /** Convert Postgres entity and Mongo content into the shared pipeline DTO. */
   private toPipelineDoc(
     doc: DocumentEntity,
     content: string,

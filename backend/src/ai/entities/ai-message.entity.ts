@@ -2,7 +2,7 @@ import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 import { bigintTransformer } from '../../common/transformers/bigint.transformer';
 import type { ChatSource } from '../chat.types';
 
-/** AI 会话消息（PostgreSQL kh_ai_message） */
+/** AI conversation message (PostgreSQL kh_ai_message). */
 @Entity('kh_ai_message')
 export class AiMessageEntity {
   @PrimaryColumn({ type: 'bigint', transformer: bigintTransformer })

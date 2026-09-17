@@ -1,25 +1,25 @@
 /**
- * 管线共用类型定义
+ * Shared pipeline type definitions.
  *
- * 这些结构在 MQ 消息体、分块结果、图谱抽取结果之间流转。
+ * These structures flow through MQ messages, chunking results, and graph extraction results.
  */
 
 /**
- * 一篇文档切出来的一块文本。
- * RAG：附 embedding 写入 ES `kh_chunk`（dense_vector）；KG：作为抽实体的输入单元。
+ * A text chunk created from a document.
+ * RAG writes it to ES `kh_chunk` with an embedding (dense_vector); KG uses it as an extraction unit.
  */
 export interface DocumentChunk {
-  /** 稳定 ID：sha256(documentId:index) 前 64 位，重建时可覆盖 */
+  /** Stable ID: first 64 characters of sha256(documentId:index), replaceable during rebuilds. */
   chunkId: string;
   documentId: string;
   documentTitle: string;
-  /** 实际送去嵌入 / 抽取的文本（通常含章节标题前缀） */
+  /** Text sent for embedding/extraction, usually prefixed with its section heading. */
   content: string;
-  /** 所属 Markdown 标题；无标题章节为 null */
+  /** Markdown heading; null for an unheaded section. */
   heading?: string | null;
-  /** 从 0 开始的块序号 */
+  /** Zero-based chunk index. */
   chunkIndex: number;
-  /** 该文档总块数（切完后回填） */
+  /** Total chunks for the document, filled after chunking. */
   totalChunks: number;
   categoryId?: string | null;
   authorId?: string | null;
@@ -27,33 +27,33 @@ export interface DocumentChunk {
   isPublic?: boolean;
   docStatus?: number | null;
   publishTime?: string | null;
-  /** 向量；分块阶段为空，EmbeddingService 填充后写入 ES dense_vector */
+  /** Embedding; empty during chunking and filled by EmbeddingService before ES dense_vector writes. */
   embedding?: number[];
 }
 
-/** kh_chunk 检索命中（关键词 / 向量 / RRF 融合后共用） */
+/** kh_chunk retrieval hit shared by keyword, vector, and RRF results. */
 export interface ChunkHit {
   chunkId: string;
   documentId: string;
   documentTitle: string;
   content: string;
   heading: string | null;
-  /** 当前阶段得分：原始检索分、RRF 分或 rerank 分 */
+  /** Score for the current stage: raw retrieval, RRF, or rerank score. */
   score: number;
   bm25Score?: number;
   vectorScore?: number;
 }
 
-/** 图谱实体（如「张三」「入职流程」「知识库」） */
+/** Graph entity (for example, a person, onboarding process, or knowledge base). */
 export interface ExtractedEntity {
   name: string;
-  /** PERSON / ORGANIZATION / CONCEPT / DOCUMENT / PROCESS / PRODUCT 等，见 docs/kg-extraction-schema.md */
+  /** PERSON / ORGANIZATION / CONCEPT / DOCUMENT / PROCESS / PRODUCT, etc.; see docs/kg-extraction-schema.md. */
   type: string;
   description?: string;
   aliases?: string[];
 }
 
-/** 实体间关系：source -[relation]-> target */
+/** Relation between entities: source -[relation]-> target. */
 export interface ExtractedRelation {
   source: string;
   target: string;
@@ -61,7 +61,7 @@ export interface ExtractedRelation {
   weight?: number;
 }
 
-/** 单个 chunk 的抽取结果 */
+/** Extraction result for one chunk. */
 export interface ExtractionResult {
   chunkId?: string;
   entities: ExtractedEntity[];
@@ -69,8 +69,8 @@ export interface ExtractionResult {
 }
 
 /**
- * 管线内部使用的「文档快照」：
- * Postgres 元数据 + Mongo 正文拼在一起，避免各服务重复查库。
+ * Internal pipeline document snapshot:
+ * Postgres metadata combined with Mongo content so services do not query both repeatedly.
  */
 export interface PipelineDocument {
   id: string;

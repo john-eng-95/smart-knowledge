@@ -21,10 +21,10 @@ import { AuthUser } from '../auth/auth-user.interface';
 import { canWriteDocument } from './document-access';
 
 /**
- * 文档发布审核服务
+ * Document publication review service.
  *
- * 与 kh_document_review 表对应：每次 submit 插入一条记录，approve/reject 回填结果。
- * 开关：环境变量 DOCUMENT_REQUIRE_APPROVAL（默认 true；false 时 publish 跳过本服务直接发布）。
+ * Maps to kh_document_review: insert one record per submission and fill the result on approve/reject.
+ * Controlled by DOCUMENT_REQUIRE_APPROVAL (true by default; when false, publish skips this service).
  */
 @Injectable()
 export class DocumentReviewService {
@@ -37,7 +37,7 @@ export class DocumentReviewService {
     private readonly config: ConfigService,
   ) {}
 
-  /** 是否开启发布审核（默认 true，DOCUMENT_REQUIRE_APPROVAL=false 时免审） */
+  /** Whether publication review is enabled (true by default). */
   isRequireApproval(): boolean {
     return (
       this.config.get<string>('DOCUMENT_REQUIRE_APPROVAL', 'true') !== 'false'
@@ -45,8 +45,8 @@ export class DocumentReviewService {
   }
 
   /**
-   * 提交审核：Draft / Published → PendingReview
-   * 若来自 Published，先清索引（审核期间不可检索）
+   * Submit for review: Draft / Published -> PendingReview.
+   * Clear indexes first when submitted from Published so it cannot be searched during review.
    */
   async submitForReview(
     documentId: string,
@@ -54,23 +54,29 @@ export class DocumentReviewService {
   ): Promise<DocumentEntity> {
     const doc = await this.findDocumentOrThrow(documentId);
     if (actor && !canWriteDocument(doc, actor)) {
-      throw new ForbiddenException('无权提交该文档审核');
+      throw new ForbiddenException(
+        'You do not have permission to submit this document for review.',
+      );
     }
 
     if (!canSubmitReview(doc.status)) {
-      throw new BadRequestException('只有草稿或已发布状态的文档才能提交审核');
+      throw new BadRequestException(
+        'Only draft or published documents can be submitted for review.',
+      );
     }
 
     const pending = await this.em.findOne(DocumentReviewEntity, {
       where: { documentId, reviewResult: IsNull() },
     });
-    // 同一文档同时只能有一条待审记录
+    // A document can have only one pending review at a time.
     if (pending) {
-      throw new BadRequestException('该文档已有待审核任务');
+      throw new BadRequestException(
+        'This document already has a pending review.',
+      );
     }
 
     const beforeStatus = doc.status;
-    // 写入审核流水；review_result 留空表示待审
+    // Write the review record; a null review_result means pending.
     const review = this.em.create(DocumentReviewEntity, {
       id: nextSnowflakeId(),
       documentId,
@@ -87,12 +93,12 @@ export class DocumentReviewService {
     }
 
     this.logger.log(
-      `文档已提交审核：documentId=${documentId}, reviewId=${review.id}, beforeStatus=${beforeStatus}`,
+      `Document submitted for review: documentId=${documentId}, reviewId=${review.id}, beforeStatus=${beforeStatus}`,
     );
     return saved;
   }
 
-  /** 审核通过 → Published + 重建索引 */
+  /** Approve review -> Published + rebuild indexes. */
   async approveReview(
     reviewId: string,
     reviewerId: string,
@@ -114,11 +120,13 @@ export class DocumentReviewService {
     const saved = await this.em.save(doc);
     await this.safePublish(saved);
 
-    this.logger.log(`审核通过：reviewId=${reviewId}, documentId=${doc.id}`);
+    this.logger.log(
+      `Review approved: reviewId=${reviewId}, documentId=${doc.id}`,
+    );
     return saved;
   }
 
-  /** 审核驳回 → Draft */
+  /** Reject review -> Draft. */
   async rejectReview(
     reviewId: string,
     reviewComment: string,
@@ -126,7 +134,7 @@ export class DocumentReviewService {
     reviewerName: string,
   ): Promise<DocumentEntity> {
     if (!reviewComment?.trim()) {
-      throw new BadRequestException('驳回意见不能为空');
+      throw new BadRequestException('A rejection comment is required.');
     }
 
     const review = await this.findPendingReviewOrThrow(reviewId);
@@ -142,11 +150,13 @@ export class DocumentReviewService {
     doc.status = DocumentStatus.Draft;
     const saved = await this.em.save(doc);
 
-    this.logger.log(`审核驳回：reviewId=${reviewId}, documentId=${doc.id}`);
+    this.logger.log(
+      `Review rejected: reviewId=${reviewId}, documentId=${doc.id}`,
+    );
     return saved;
   }
 
-  /** 待办 / 已通过 / 已驳回 列表 */
+  /** List pending, approved, or rejected reviews. */
   async listTasks(query: QueryReviewTasksDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
@@ -178,7 +188,7 @@ export class DocumentReviewService {
     });
   }
 
-  /** 该文档当前待审任务（无则 null） */
+  /** Return the document's current pending review, or null. */
   async getCurrentReview(documentId: string) {
     return this.em.findOne(DocumentReviewEntity, {
       where: { documentId, reviewResult: IsNull() },
@@ -186,7 +196,7 @@ export class DocumentReviewService {
     });
   }
 
-  /** 该文档全部审核记录（含已通过、已驳回） */
+  /** Return all review records for the document, including approved and rejected records. */
   async getReviewHistory(documentId: string) {
     return this.em.find(DocumentReviewEntity, {
       where: { documentId },
@@ -202,7 +212,9 @@ export class DocumentReviewService {
       throw new NotFoundException(`Review ${reviewId} not found`);
     }
     if (review.reviewResult != null) {
-      throw new BadRequestException('该审核任务已处理');
+      throw new BadRequestException(
+        'This review task has already been processed.',
+      );
     }
     return review;
   }
@@ -223,7 +235,7 @@ export class DocumentReviewService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `审核通过后索引投递失败：documentId=${doc.id}, ${message}`,
+        `Failed to enqueue indexes after approval: documentId=${doc.id}, ${message}`,
       );
     }
   }
@@ -234,7 +246,7 @@ export class DocumentReviewService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `提交审核后索引清理失败：documentId=${documentId}, ${message}`,
+        `Failed to clean indexes after review submission: documentId=${documentId}, ${message}`,
       );
     }
   }

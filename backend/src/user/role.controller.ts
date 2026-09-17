@@ -72,7 +72,7 @@ export class RoleController {
   @Delete(':id')
   async deleteRole(@Param('id') id: string) {
     await this.roleService.delete(id);
-    return { message: '删除成功' };
+    return { message: 'Deleted successfully' };
   }
 
   @Get(':id/permissions')

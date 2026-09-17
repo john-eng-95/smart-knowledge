@@ -57,21 +57,21 @@ export default function AppLayout() {
 
   const topItems = useMemo(() => {
     const items: MenuItem[] = [
-      { key: '/dashboard', label: '首页大盘', icon: <HomeOutlined /> },
+      { key: '/dashboard', label: 'Dashboard', icon: <HomeOutlined /> },
     ]
     if (can(user, 'document:list')) {
-      items.push({ key: '/documents', label: '文档管理', icon: <FileTextOutlined /> })
+      items.push({ key: '/documents', label: 'Documents', icon: <FileTextOutlined /> })
     }
     if (can(user, 'search')) {
-      items.push({ key: '/search', label: '文档搜索', icon: <SearchOutlined /> })
-      items.push({ key: '/chat', label: 'AI智能问答', icon: <MessageOutlined /> })
-      items.push({ key: '/graph', label: '知识图谱', icon: <ClusterOutlined /> })
+      items.push({ key: '/search', label: 'Search', icon: <SearchOutlined /> })
+      items.push({ key: '/chat', label: 'AI Assistant', icon: <MessageOutlined /> })
+      items.push({ key: '/graph', label: 'Knowledge Graph', icon: <ClusterOutlined /> })
     }
     if (can(user, 'profile')) {
-      items.push({ key: '/profile', label: '个人中心', icon: <UserOutlined /> })
+      items.push({ key: '/profile', label: 'Profile', icon: <UserOutlined /> })
     }
     if (isAdmin(user)) {
-      items.push({ key: '/admin/users', label: '系统管理', icon: <SettingOutlined /> })
+      items.push({ key: '/admin/users', label: 'Administration', icon: <SettingOutlined /> })
     }
     return items
   }, [user])
@@ -79,53 +79,53 @@ export default function AppLayout() {
   const side = useMemo(() => {
     if (topKey === '/documents') {
       const items: MenuItem[] = [
-        { key: '/documents', icon: <ReadOutlined />, label: '可见文档' },
-        { key: '/documents/new', icon: <FileTextOutlined />, label: '新建文档' },
+        { key: '/documents', icon: <ReadOutlined />, label: 'Visible documents' },
+        { key: '/documents/new', icon: <FileTextOutlined />, label: 'New document' },
       ]
       if (isReviewer(user)) {
-        items.push({ key: '/admin/reviews', icon: <BellOutlined />, label: '审核工作台' })
+        items.push({ key: '/admin/reviews', icon: <BellOutlined />, label: 'Review workspace' })
       }
-      return { title: '文档管理', items }
+      return { title: 'Documents', items }
     }
     if (topKey === '/search') {
       return {
-        title: '文档搜索',
-        items: [{ key: '/search', icon: <SearchOutlined />, label: '全文检索' }],
+        title: 'Search',
+        items: [{ key: '/search', icon: <SearchOutlined />, label: 'Full-text search' }],
       }
     }
     if (topKey === '/chat') {
       return {
-        title: 'AI智能问答',
-        items: [{ key: '/chat', icon: <MessageOutlined />, label: '知识问答' }],
+        title: 'AI Assistant',
+        items: [{ key: '/chat', icon: <MessageOutlined />, label: 'Knowledge chat' }],
       }
     }
     if (topKey === '/graph') {
       return {
-        title: '知识图谱',
+        title: 'Knowledge Graph',
         items: [
-          { key: '/graph', icon: <ApartmentOutlined />, label: '全景图谱' },
+          { key: '/graph', icon: <ApartmentOutlined />, label: 'Graph overview' },
         ],
       }
     }
     if (topKey === '/profile') {
       return {
-        title: '个人中心',
-        items: [{ key: '/profile', icon: <UserOutlined />, label: '账号资料' }],
+        title: 'Profile',
+        items: [{ key: '/profile', icon: <UserOutlined />, label: 'Account details' }],
       }
     }
     if (topKey === '/admin') {
       return {
-        title: '系统管理',
+        title: 'Administration',
         items: [
-          { key: '/admin/users', icon: <UserOutlined />, label: '用户管理' },
-          { key: '/admin/roles', icon: <SafetyCertificateOutlined />, label: '角色权限' },
-          { key: '/admin/teams', icon: <TeamOutlined />, label: '团队管理' },
+          { key: '/admin/users', icon: <UserOutlined />, label: 'Users' },
+          { key: '/admin/roles', icon: <SafetyCertificateOutlined />, label: 'Roles and permissions' },
+          { key: '/admin/teams', icon: <TeamOutlined />, label: 'Teams' },
         ],
       }
     }
     return {
-      title: '首页大盘',
-      items: [{ key: '/dashboard', icon: <HomeOutlined />, label: '工作概览' }],
+      title: 'Dashboard',
+      items: [{ key: '/dashboard', icon: <HomeOutlined />, label: 'Work overview' }],
     }
   }, [topKey, user])
 
@@ -157,11 +157,11 @@ export default function AppLayout() {
               items: [
                 ...(can(user, 'profile')
                   ? [
-                      { key: 'profile', label: '个人中心' },
+                      { key: 'profile', label: 'Profile' },
                       { type: 'divider' as const },
                     ]
                   : []),
-                { key: 'logout', label: '退出登录' },
+                { key: 'logout', label: 'Sign out' },
               ],
               onClick: ({ key }) => {
                 if (key === 'profile') navigate('/profile')
@@ -204,7 +204,7 @@ export default function AppLayout() {
           />
           <div className="kh-sider-bottom" onClick={() => setCollapsed((v) => !v)}>
             {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            {!collapsed ? <span>收起菜单</span> : null}
+            {!collapsed ? <span>Collapse menu</span> : null}
           </div>
         </Sider>
         <Content className="kh-content">

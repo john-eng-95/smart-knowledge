@@ -1,6 +1,6 @@
 import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
-/** 登录 */
+/** Sign-in request. */
 export class LoginDto {
   @IsString()
   username: string;
@@ -9,7 +9,7 @@ export class LoginDto {
   password: string;
 }
 
-/** 注册（默认注册后立即可登录；REQUIRE_EMAIL_VERIFICATION=true 时需邮箱激活） */
+/** Registration request (sign-in is immediate by default; email activation is required when REQUIRE_EMAIL_VERIFICATION=true). */
 export class RegisterDto {
   @IsString()
   username: string;
@@ -27,7 +27,7 @@ export class RegisterDto {
   realName?: string;
 }
 
-/** 刷新 Token */
+/** Refresh token request. */
 export class RefreshTokenDto {
   @IsString()
   refreshToken: string;

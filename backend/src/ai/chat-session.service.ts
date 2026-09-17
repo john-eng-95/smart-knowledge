@@ -13,7 +13,7 @@ import {
   UpdateSessionDto,
 } from './dto/session.dto';
 
-const DEFAULT_TITLE = '新对话';
+const DEFAULT_TITLE = 'New chat';
 
 @Injectable()
 export class ChatSessionService {
@@ -52,7 +52,7 @@ export class ChatSessionService {
     return this.em.save(session);
   }
 
-  /** 仍为默认标题时，用首问覆盖 */
+  /** Replace the default title with the first question when it is still unchanged. */
   async touchTitle(userId: string, id: string, question: string) {
     const session = await this.getOwned(userId, id);
     if (session.title === DEFAULT_TITLE) {
@@ -67,7 +67,7 @@ export class ChatSessionService {
     await this.em.delete(AiSessionEntity, { id });
     await this.shortMemory.clear(userId, id);
     await this.longMemory.clearSession(userId, id);
-    return { message: '已删除' };
+    return { message: 'Deleted' };
   }
 
   async listMessages(userId: string, sessionId: string) {
@@ -78,7 +78,7 @@ export class ChatSessionService {
     });
   }
 
-  /** 最近 N 条，时间正序，供 Redis miss 时回填工作窗口 */
+  /** Return the latest N messages in chronological order for Redis window recovery. */
   async listRecentMessages(userId: string, sessionId: string, limit: number) {
     await this.getOwned(userId, sessionId);
     const rows = await this.em.find(AiMessageEntity, {
@@ -90,7 +90,7 @@ export class ChatSessionService {
   }
 
   /**
-   * 问答落库：无 sessionId 则新建；标题在仍为默认名时用首问覆盖。
+   * Persist a chat response: create a session when sessionId is absent and use the first question as the title.
    */
   async appendTurn(
     userId: string,
@@ -131,7 +131,7 @@ export class ChatSessionService {
       where: { id, userId },
     });
     if (!session) {
-      throw new NotFoundException('会话不存在');
+      throw new NotFoundException('Conversation not found');
     }
     return session;
   }

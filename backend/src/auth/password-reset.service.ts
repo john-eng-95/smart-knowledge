@@ -5,7 +5,7 @@ const RESET_CODE_PREFIX = 'password:reset:code:';
 export const RESET_CODE_TTL_SECONDS = 10 * 60;
 export const RESET_CODE_COOLDOWN_SECONDS = 60;
 
-/** 密码重置验证码（Redis 存储） */
+/** Password reset verification codes stored in Redis. */
 @Injectable()
 export class PasswordResetService {
   constructor(private readonly redis: RedisService) {}

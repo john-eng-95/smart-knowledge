@@ -32,8 +32,8 @@ export function focusCite(scope: string, index: number) {
 }
 
 /**
- * 引用卡片停在对话里，展示用到的块摘录。
- * 「查看原文」才开文档，避免点 [n] 就把问答冲掉。
+ * Keep citation cards in the conversation and show excerpts from used chunks.
+ * Open the document only through "Open source" so clicking [n] does not leave the chat.
  */
 export function SourceCiteList({
   items,
@@ -49,7 +49,7 @@ export function SourceCiteList({
   if (!items.length) return null
   return (
     <div className="kh-cite-list">
-      <div className="kh-cite-list-title">引用文档 ({items.length})</div>
+      <div className="kh-cite-list-title">Cited documents ({items.length})</div>
       <div className="kh-cite-rail">
         {items.map((s, i) => {
           const index = s.index ?? i + 1
@@ -82,7 +82,7 @@ export function SourceCiteList({
                   rel="noreferrer"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  查看原文
+                  Open source
                 </Link>
               </div>
             </div>
@@ -93,7 +93,7 @@ export function SourceCiteList({
   )
 }
 
-/** 回答 Markdown + [n] 定位到本条消息的引用卡 */
+/** Render answer Markdown and link [n] citations to this message's citation cards. */
 export function AnswerMarkdown({
   text,
   sources,
@@ -190,7 +190,7 @@ function CiteChips({
             key={i}
             type="button"
             className="kh-cite-inline"
-            title="查看本条用到的资料块"
+            title="View the source chunk used by this message"
             onClick={() => onCite(index)}
           >
             {part}

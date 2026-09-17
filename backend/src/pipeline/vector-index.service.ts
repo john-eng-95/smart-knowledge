@@ -16,18 +16,18 @@ import {
   type DocumentAccessScope,
 } from '../document/document-access';
 
-/** RAG 分块向量索引名 */
+/** RAG chunk vector index name. */
 const CHUNK_INDEX = 'kh_chunk';
 
 /**
- * 向量索引存储
+ * Vector index storage.
  *
- * <p>写入 Elasticsearch `kh_chunk`，字段含 dense_vector(embedding)，供后续 kNN / 混合检索。</p>
+ * <p>Writes to Elasticsearch `kh_chunk`, including dense_vector(embedding) for kNN and hybrid retrieval.</p>
  *
- * <p>职责：</p>
- * - 启动时确保索引 mapping 存在（含 dense_vector）
- * - 按 document_id 删除旧块（重建前先清）
- * - bulk 写入带 embedding 的 chunk
+ * <p>Responsibilities:</p>
+ * - Ensure the index mapping exists at startup, including dense_vector.
+ * - Delete old chunks by document_id before rebuilding.
+ * - Bulk-write chunks with embeddings.
  */
 @Injectable()
 export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
@@ -44,7 +44,9 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     if (!this.esEnabled) {
-      this.logger.warn('Elasticsearch 已禁用，RAG 向量索引将跳过写入');
+      this.logger.warn(
+        'Elasticsearch is disabled; skipping RAG vector index writes',
+      );
       return;
     }
 
@@ -56,13 +58,15 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
     try {
       const health = await this.es.cluster.health();
       this.logger.log(
-        `VectorIndex ES 已连接：${node}, status=${health.status}`,
+        `VectorIndex ES connected: ${node}, status=${health.status}`,
       );
       await this.createIndexIfNotExists();
       await this.ensureVisibilityMapping();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Elasticsearch 不可用，RAG 向量写入将跳过：${message}`);
+      this.logger.warn(
+        `Elasticsearch unavailable; skipping RAG vector writes: ${message}`,
+      );
       this.es = null;
     }
   }
@@ -71,14 +75,14 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
     await this.es?.close();
   }
 
-  /** 已发布文档只改公开/团队时，批量改 chunk 可见性，不必重算向量 */
+  /** Batch-update chunk visibility for published documents without recomputing embeddings. */
   async updateVisibility(
     documentId: string,
     vis: { isPublic: boolean; teamId: string | null; authorId: string | null },
   ) {
     if (!this.es) {
       this.logger.warn(
-        `跳过向量可见性更新（ES 不可用）：documentId=${documentId}`,
+        `Skipping vector visibility update (ES unavailable): documentId=${documentId}`,
       );
       return;
     }
@@ -98,20 +102,22 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
         },
       });
       this.logger.log(
-        `向量块可见性已更新：documentId=${documentId}, updated=${result.updated ?? 0}`,
+        `Vector chunk visibility updated: documentId=${documentId}, updated=${result.updated ?? 0}`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `向量块可见性更新失败：documentId=${documentId}, ${message}`,
+        `Vector chunk visibility update failed: documentId=${documentId}, ${message}`,
       );
     }
   }
 
-  /** 删除某文档全部向量块（发布重建 / 下架时调用）。 */
+  /** Delete all vector chunks for a document (used during publication rebuilds or unpublishing). */
   async deleteByDocId(documentId: string) {
     if (!this.es) {
-      this.logger.warn(`跳过删除向量块（ES 不可用）：documentId=${documentId}`);
+      this.logger.warn(
+        `Skipping vector chunk deletion (ES unavailable): documentId=${documentId}`,
+      );
       return;
     }
 
@@ -123,26 +129,28 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
         },
         refresh: true,
       });
-      this.logger.log(`已从 ES 删除文档向量块：documentId=${documentId}`);
+      this.logger.log(
+        `Document vector chunks deleted from ES: documentId=${documentId}`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      // 索引尚不存在时忽略
+      // Ignore a missing index.
       if (message.includes('index_not_found')) {
         return;
       }
       this.logger.error(
-        `ES 删除文档块失败：documentId=${documentId}, error=${message}`,
+        `ES document chunk deletion failed: documentId=${documentId}, error=${message}`,
       );
     }
   }
 
-  /** bulk 写入 / 覆盖 chunk（_id = chunkId）。 */
+  /** Bulk-write or replace chunks (_id = chunkId). */
   async indexChunks(chunks: DocumentChunk[]) {
     if (!chunks.length) return;
 
     if (!this.es) {
       this.logger.warn(
-        `跳过向量索引写入（ES 不可用）：chunks=${chunks.length}`,
+        `Skipping vector index write (ES unavailable): chunks=${chunks.length}`,
       );
       return;
     }
@@ -166,18 +174,22 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
           (item) =>
             `${item.index?._id}: ${item.index?.error?.reason ?? 'unknown'}`,
         );
-      this.logger.error(`ES 批量索引部分失败：${failed.join(', ')}`);
-      throw new Error(`ES 批量索引部分失败：${failed.length} 条`);
+      this.logger.error(
+        `Some ES bulk index operations failed: ${failed.join(', ')}`,
+      );
+      throw new Error(
+        `Some ES bulk index operations failed: ${failed.length} items`,
+      );
     }
 
     this.logger.log(
-      `ES 批量索引成功：${chunks.length} chunks → ${CHUNK_INDEX}`,
+      `ES bulk index completed: ${chunks.length} chunks -> ${CHUNK_INDEX}`,
     );
   }
 
   /**
-   * BM25 关键词检索（content + document_title，ik_smart）。
-   * ES 不可用时返回 []。
+   * BM25 keyword search (content + document_title, ik_smart).
+   * Return [] when ES is unavailable.
    */
   async keywordSearch(
     query: string,
@@ -185,7 +197,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
     scope?: DocumentAccessScope,
   ): Promise<ChunkHit[]> {
     if (!this.es) {
-      this.logger.warn('跳过关键词检索（ES 不可用）');
+      this.logger.warn('Skipping keyword search (ES unavailable)');
       return [];
     }
     const trimmed = query.trim();
@@ -220,14 +232,14 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
       return this.mapHits(response.hits.hits);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`关键词检索失败：${message}`);
+      this.logger.warn(`Keyword search failed: ${message}`);
       return [];
     }
   }
 
   /**
-   * kNN 检索知识块（cosine）。
-   * ES 不可用或索引为空时返回 []。
+   * kNN search for knowledge chunks (cosine).
+   * Return [] when ES is unavailable or the index is empty.
    */
   async knnSearch(
     queryVector: number[],
@@ -235,7 +247,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
     scope?: DocumentAccessScope,
   ): Promise<ChunkHit[]> {
     if (!this.es) {
-      this.logger.warn('跳过向量检索（ES 不可用）');
+      this.logger.warn('Skipping vector search (ES unavailable)');
       return [];
     }
     if (!queryVector.length) return [];
@@ -267,14 +279,14 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
       return this.mapHits(response.hits.hits);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`向量检索失败：${message}`);
+      this.logger.warn(`Vector search failed: ${message}`);
       return [];
     }
   }
 
   /**
-   * 混合检索粗排：关键词 + 向量并行召回，再按 chunkId 做 RRF 融合。
-   * 嵌入失败或未传入时只走关键词。
+   * Hybrid retrieval: retrieve keywords and vectors in parallel, then fuse by chunkId with RRF.
+   * Use keyword retrieval only when embeddings fail or are not provided.
    */
   async searchHybrid(params: {
     query: string;
@@ -295,7 +307,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
 
     const fused = this.rrfFuse(keywordHits, vectorHits, rrfC);
     this.logger.log(
-      `混合检索 RRF：keyword=${keywordHits.length}, vector=${vectorHits.length}, fused=${fused.length}`,
+      `Hybrid retrieval RRF: keyword=${keywordHits.length}, vector=${vectorHits.length}, fused=${fused.length}`,
     );
     return fused;
   }
@@ -326,7 +338,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Reciprocal Rank Fusion：score(d) = Σ 1 / (C + rank_r(d))
-   * 两路各自按原始得分排序后再算排名。
+   * Sort each result stream by its raw score before calculating ranks.
    */
   private rrfFuse(
     keywordHits: ChunkHit[],
@@ -362,8 +374,8 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 创建 kh_chunk 索引（dense_vector + IK）。
-   * document_id 用 keyword：雪花 ID 以字符串传递，避免 JS long 精度问题。
+   * Create the kh_chunk index (dense_vector + IK).
+   * Use keyword for document_id because Snowflake IDs are strings and JavaScript long precision is limited.
    */
   private async createIndexIfNotExists() {
     if (!this.es) return;
@@ -414,19 +426,19 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
         },
       });
       this.logger.log(
-        `ES 索引创建成功：index=${CHUNK_INDEX}, dims=${this.embeddingDims}`,
+        `ES index created: index=${CHUNK_INDEX}, dims=${this.embeddingDims}`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes('resource_already_exists')) {
         return;
       }
-      this.logger.error(`ES 索引创建失败：${message}`);
+      this.logger.error(`ES index creation failed: ${message}`);
       throw error;
     }
   }
 
-  /** 已有索引补可见性字段（旧 mapping 没有 is_public） */
+  /** Add visibility fields to an existing index whose mapping lacks is_public. */
   private async ensureVisibilityMapping() {
     if (!this.es) return;
     try {
@@ -440,7 +452,7 @@ export class VectorIndexService implements OnModuleInit, OnModuleDestroy {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`kh_chunk 可见性 mapping 更新失败：${message}`);
+      this.logger.warn(`kh_chunk visibility mapping update failed: ${message}`);
     }
   }
 

@@ -14,7 +14,7 @@ export interface WebSearchResult {
   error?: string;
 }
 
-/** Bocha Web Search，与 cron-job-tool 同一接口 */
+/** Bocha Web Search, using the same interface as cron-job-tool. */
 @Injectable()
 export class WebSearchService {
   private readonly logger = new Logger(WebSearchService.name);
@@ -27,7 +27,7 @@ export class WebSearchService {
       return {
         query,
         items: [],
-        error: '未配置 BOCHA_API_KEY，无法联网搜索',
+        error: 'BOCHA_API_KEY is not configured; web search is unavailable',
       };
     }
 
@@ -47,11 +47,11 @@ export class WebSearchService {
 
     if (!response.ok) {
       const detail = await response.text();
-      this.logger.warn(`Bocha 搜索失败：status=${response.status}`);
+      this.logger.warn(`Bocha search failed: status=${response.status}`);
       return {
         query,
         items: [],
-        error: `搜索失败（${response.status}）${detail.slice(0, 120)}`,
+        error: `Search failed (${response.status}) ${detail.slice(0, 120)}`,
       };
     }
 
@@ -75,7 +75,7 @@ export class WebSearchService {
       return {
         query,
         items: [],
-        error: json.msg ?? '搜索接口返回异常',
+        error: json.msg ?? 'The search API returned an unexpected response',
       };
     }
 

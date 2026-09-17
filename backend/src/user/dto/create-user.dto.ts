@@ -7,7 +7,7 @@ import {
   MinLength,
 } from 'class-validator';
 
-/** 管理员创建用户 */
+/** Administrator create-user payload. */
 export class CreateUserDto {
   @IsString()
   username: string;
@@ -28,12 +28,12 @@ export class CreateUserDto {
   @IsString()
   avatar?: string;
 
-  /** 0 禁用 1 启用，默认 1 */
+  /** 0 = disabled, 1 = enabled; defaults to 1. */
   @IsOptional()
   @IsInt()
   status?: number;
 
-  /** 角色编码列表，默认 ROLE_USER */
+  /** Role code list; defaults to ROLE_USER. */
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

@@ -8,13 +8,13 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-/** RAG 混合检索请求（不生成回答） */
+/** Hybrid RAG search request (does not generate an answer). */
 export class RagSearchDto {
   @IsString()
   @IsNotEmpty()
   query: string;
 
-  /** 精排后返回条数，默认 5 */
+  /** Number of reranked results to return; defaults to 5. */
   @IsOptional()
   @Type(() => Number)
   @IsInt()

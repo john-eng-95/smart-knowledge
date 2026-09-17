@@ -35,7 +35,7 @@ export default function TeamsPage() {
       setTotal(res.total)
       setPage(nextPage)
     } catch (error) {
-      message.error(error instanceof ApiError ? error.message : '加载失败')
+      message.error(error instanceof ApiError ? error.message : 'Failed to load teams')
     }
   }
 
@@ -74,7 +74,7 @@ export default function TeamsPage() {
           })),
       )
     } catch (error) {
-      message.error(error instanceof ApiError ? error.message : '搜索用户失败')
+      message.error(error instanceof ApiError ? error.message : 'User search failed')
     } finally {
       setSearching(false)
     }
@@ -88,14 +88,14 @@ export default function TeamsPage() {
     <div className="kh-page">
       <Space style={{ marginBottom: 16 }}>
         <Input
-          placeholder="团队名称"
+          placeholder="Team name"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           onPressEnter={() => void load(1)}
         />
-        <Button onClick={() => void load(1)}>查询</Button>
+        <Button onClick={() => void load(1)}>Search</Button>
         <Button type="primary" onClick={() => setOpen(true)}>
-          新建团队
+          New team
         </Button>
       </Space>
       <Table
@@ -103,12 +103,12 @@ export default function TeamsPage() {
         dataSource={items}
         pagination={{ current: page, pageSize: 10, total, onChange: (p) => void load(p) }}
         columns={[
-          { title: '名称', dataIndex: 'teamName' },
-          { title: '编码', dataIndex: 'teamCode' },
-          { title: '说明', dataIndex: 'description' },
-          { title: '成员数', dataIndex: 'memberCount' },
+          { title: 'Name', dataIndex: 'teamName' },
+          { title: 'Code', dataIndex: 'teamCode' },
+          { title: 'Description', dataIndex: 'description' },
+          { title: 'Members', dataIndex: 'memberCount' },
           {
-            title: '操作',
+            title: 'Actions',
             render: (_: unknown, row: TeamItem) => (
               <a
                 onClick={async () => {
@@ -118,45 +118,45 @@ export default function TeamsPage() {
                   try {
                     await loadMembers(row.id)
                   } catch (error) {
-                    message.error(error instanceof ApiError ? error.message : '加载成员失败')
+                    message.error(error instanceof ApiError ? error.message : 'Failed to load members')
                   }
                 }}
               >
-                成员
+                Members
               </a>
             ),
           },
         ]}
       />
-      <Modal title="新建团队" open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()}>
+      <Modal title="New team" open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()}>
         <Form
           form={form}
           layout="vertical"
           onFinish={async (values: { teamName: string; teamCode?: string; description?: string }) => {
             try {
               await teamApi.create(values)
-              message.success('已创建')
+              message.success('Created')
               setOpen(false)
               form.resetFields()
               void load(1)
             } catch (error) {
-              message.error(error instanceof ApiError ? error.message : '创建失败')
+              message.error(error instanceof ApiError ? error.message : 'Creation failed')
             }
           }}
         >
-          <Form.Item name="teamName" label="名称" rules={[{ required: true }]}>
+          <Form.Item name="teamName" label="Name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="teamCode" label="编码">
+          <Form.Item name="teamCode" label="Code">
             <Input />
           </Form.Item>
-          <Form.Item name="description" label="说明">
+          <Form.Item name="description" label="Description">
             <Input />
           </Form.Item>
         </Form>
       </Modal>
       <Modal
-        title={membersFor ? `成员：${membersFor.teamName}` : '成员'}
+        title={membersFor ? `Members: ${membersFor.teamName}` : 'Members'}
         open={Boolean(membersFor)}
         onCancel={() => setMembersFor(null)}
         footer={null}
@@ -169,19 +169,19 @@ export default function TeamsPage() {
               onSearch: (value) => void searchUsers(value),
             }}
             allowClear
-            placeholder="按用户名搜索"
+            placeholder="Search by username"
             value={selectedUserId}
             options={userOptions}
             loading={searching}
             onChange={(value) => setSelectedUserId(value)}
             style={{ width: 280 }}
-            notFoundContent={searching ? '搜索中…' : '输入用户名搜索'}
+            notFoundContent={searching ? 'Searching…' : 'Enter a username to search'}
           />
           <Button
             type="primary"
             onClick={async () => {
               if (!membersFor || !selectedUserId) {
-                message.warning('请先按用户名搜索并选择成员')
+                message.warning('Search by username and select a member first')
                 return
               }
               try {
@@ -189,13 +189,13 @@ export default function TeamsPage() {
                 await loadMembers(membersFor.id)
                 setSelectedUserId(undefined)
                 setUserOptions([])
-                message.success('已添加')
+                message.success('Added')
               } catch (error) {
-                message.error(error instanceof ApiError ? error.message : '添加失败')
+                message.error(error instanceof ApiError ? error.message : 'Add failed')
               }
             }}
           >
-            添加
+            Add
           </Button>
         </Space>
         <Table
@@ -203,30 +203,30 @@ export default function TeamsPage() {
           dataSource={members}
           pagination={false}
           columns={[
-            { title: '用户名', dataIndex: 'username' },
-            { title: '姓名', dataIndex: 'realName' },
-            { title: '角色', dataIndex: 'memberRole' },
+            { title: 'Username', dataIndex: 'username' },
+            { title: 'Name', dataIndex: 'realName' },
+            { title: 'Role', dataIndex: 'memberRole' },
             {
-              title: '操作',
+              title: 'Actions',
               width: 80,
               render: (_: unknown, row: MemberRow) => (
                 <Popconfirm
-                  title={`确定将 ${row.username} 移出团队？`}
-                  okText="踢出"
+                  title={`Remove ${row.username} from this team?`}
+                  okText="Remove"
                   okType="danger"
-                  cancelText="取消"
+                  cancelText="Cancel"
                   onConfirm={async () => {
                     if (!membersFor) return
                     try {
                       await teamApi.removeMembers(membersFor.id, [row.userId])
                       await loadMembers(membersFor.id)
-                      message.success('已移出')
+                      message.success('Removed')
                     } catch (error) {
-                      message.error(error instanceof ApiError ? error.message : '移出失败')
+                      message.error(error instanceof ApiError ? error.message : 'Remove failed')
                     }
                   }}
                 >
-                  <a style={{ color: '#ff4d4f' }}>踢出</a>
+                  <a style={{ color: '#ff4d4f' }}>Remove</a>
                 </Popconfirm>
               ),
             },

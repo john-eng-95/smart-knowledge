@@ -3,7 +3,7 @@ import type { AuthUser } from '../auth/auth-user.interface';
 import { DocumentStatus } from './document-status';
 import type { DocumentEntity } from './entities/document.entity';
 
-/** 当前用户可读哪些文档：公开 ∪ 所在团队 ∪ 自己写的；管理员/审核员不限制 */
+/** Documents readable by the current user: public, team-shared, or authored by the user; admins/reviewers are unrestricted. */
 export type DocumentAccessScope = {
   unrestricted: boolean;
   userId: string;
@@ -52,16 +52,17 @@ export const ES_DOC_VISIBILITY_FIELDS = {
 };
 
 /**
- * Elasticsearch 可见性 filter（只筛不打分）。
- * fields 区分 kh_document（camelCase）与 kh_chunk（snake_case）。
- * 管理员/审核员返回 null，调用方不加过滤。
+ * Elasticsearch visibility filter (filters without affecting scores).
+ * fields distinguishes kh_document (camelCase) from kh_chunk (snake_case).
+ * Return null for admins/reviewers so callers add no filter.
  */
 export function esVisibilityFilter(
   scope: DocumentAccessScope,
   fields: { isPublic: string; authorId: string; teamId: string },
 ): Record<string, unknown> | null {
   if (scope.unrestricted) return null;
-  // 公开 ∪ 自己写的；有团队再 OR 所在团队。不判断 status，假定未发布未进索引。
+  // Public or authored by the user; add the user's teams when present.
+  // Do not check status because unpublished documents are assumed to be absent from indexes.
   const should: Record<string, unknown>[] = [
     { term: { [fields.isPublic]: true } },
     { term: { [fields.authorId]: scope.userId } },
@@ -69,11 +70,11 @@ export function esVisibilityFilter(
   if (scope.teamIds.length) {
     should.push({ terms: { [fields.teamId]: scope.teamIds } });
   }
-  // filter 上下文中 should = 或；至少命中一条才可见
+  // In a filter context, should means OR; at least one clause must match.
   return { bool: { should, minimum_should_match: 1 } };
 }
 
-/** 相关性查询放 must，可见性放 filter，避免权限条件影响打分 */
+/** Put relevance queries in must and visibility queries in filter so permissions do not affect scores. */
 export function wrapEsQuery(
   query: Record<string, unknown>,
   filter: Record<string, unknown> | null,
@@ -95,7 +96,7 @@ export function neo4jAccessParams(scope?: DocumentAccessScope) {
   };
 }
 
-/** Cypher：文档节点是否对当前用户可见 */
+/** Cypher predicate for whether a document node is visible to the current user. */
 export function neo4jDocumentAccessWhere(alias = 'd'): string {
   return (
     `($unrestricted OR ${alias}.authorId = $accessUserId ` +

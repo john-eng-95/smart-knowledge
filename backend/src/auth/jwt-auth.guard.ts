@@ -8,17 +8,17 @@ import { AuthGuard } from '@nestjs/passport';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 
 /**
- * 全局 JWT 鉴权守卫
+ * Global JWT authentication guard.
  *
- * <p>在 {@link AuthModule} 里通过 {@code APP_GUARD} 注册，默认所有 HTTP 接口都需要登录。</p>
+ * <p>Registered through {@code APP_GUARD} in {@link AuthModule}; all HTTP endpoints require authentication by default.</p>
  *
- * <p>执行顺序（canActivate）：</p>
+ * <p>Execution order (canActivate):</p>
  * <ol>
- *   <li>读 {@link Public} 元数据 → 公开接口直接放行（login / register / refresh）</li>
- *   <li>否则调用父类 {@link AuthGuard}('jwt') → 触发 {@link JwtStrategy}</li>
+ *   <li>Read {@link Public} metadata and allow public endpoints (login / register / refresh).</li>
+ *   <li>Otherwise call the parent {@link AuthGuard}('jwt') to invoke {@link JwtStrategy}.</li>
  * </ol>
  *
- * <p>验签失败或 validate 抛错时，{@link handleRequest} 统一转为 401。</p>
+ * <p>{@link handleRequest} maps signature failures and validate errors to 401.</p>
  */
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -37,10 +37,10 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return super.canActivate(context);
   }
 
-  /** Passport 回调：无 user 或 Strategy 报错 → 401 */
+  /** Passport callback: missing user or a strategy error becomes 401. */
   handleRequest<TUser>(err: Error | null, user: TUser): TUser {
     if (err || !user) {
-      throw err ?? new UnauthorizedException('未登录或 token 已失效');
+      throw err ?? new UnauthorizedException('Not signed in or token expired');
     }
     return user;
   }

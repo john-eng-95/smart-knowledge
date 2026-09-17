@@ -26,7 +26,7 @@ const EXCERPT_LEN = 200;
 const CITATION_RE = /\[(\d+)\]/g;
 
 /**
- * RAG 对话：kh_chunk 混合检索（关键词 + 向量 + RRF + rerank）→ LLM 作答。
+ * RAG chat: hybrid kh_chunk retrieval (keyword + vector + RRF + rerank) -> LLM response.
  */
 @Injectable()
 export class AiChatService {
@@ -75,7 +75,7 @@ export class AiChatService {
     if (!trimmed) {
       return {
         sessionId: sessionId ?? null,
-        answer: '请输入问题。',
+        answer: 'Please enter a question.',
         sources: [] as ChatSource[],
       };
     }
@@ -94,7 +94,7 @@ export class AiChatService {
     ]);
     if (plan.needRetrieve && !hits.length) {
       const empty = {
-        answer: '知识库里没有相关内容。',
+        answer: 'No relevant content was found in the knowledge base.',
         sources: [] as ChatSource[],
       };
       const session = user
@@ -126,23 +126,23 @@ export class AiChatService {
 
     if (!this.llm) {
       throw new ServiceUnavailableException(
-        '未配置 OPENAI_API_KEY / LLM_API_KEY / DASHSCOPE_API_KEY，无法生成回答',
+        'OPENAI_API_KEY, LLM_API_KEY, or DASHSCOPE_API_KEY is not configured; unable to generate a response',
       );
     }
 
     const memoryMsg = this.longMemory.buildSystemMessage(memHits);
     const userTurn = hits.length
-      ? `检索到的资料：\n${this.buildContext(hits)}\n\n用户问题：${trimmed}`
-      : `用户问题：${trimmed}`;
+      ? `Retrieved sources:\n${this.buildContext(hits)}\n\nUser question: ${trimmed}`
+      : `User question: ${trimmed}`;
     const response = await this.llm.invoke([
       new SystemMessage(
-        '你是企业知识库助手。有检索资料时只根据资料回答用户问题。' +
-          '结合对话历史和记忆里的用户背景，但制度/流程以本轮资料为准，不要用记忆替代文档。' +
-          '没有检索资料时，可回应寒暄或对话，不要编造制度。' +
-          '若资料不足以回答制度问题，明确说不知道，不要编造。' +
-          '凡是依据某条资料作出的陈述，必须在句末标注对应编号，如 [1]、[2]。' +
-          '编号必须与资料列表一致，不要标注未使用的编号，不要编造文档标题或链接。' +
-          '回答简洁，必要时列出条目。',
+        'You are an enterprise knowledge base assistant. When retrieved sources are available, answer only from those sources. ' +
+          'Use conversation history and user background from memory, but treat sources from this turn as authoritative for policies and procedures; never replace documents with memory. ' +
+          'When no sources are available, you may respond to greetings or general conversation, but do not invent policies. ' +
+          'If the sources are insufficient to answer a policy question, clearly say you do not know and do not fabricate details. ' +
+          'Every statement based on a source must end with its source number, such as [1] or [2]. ' +
+          'Source numbers must match the source list; do not cite unused numbers or invent document titles or links. ' +
+          'Keep answers concise and use lists when helpful.',
       ),
       ...(memoryMsg ? [memoryMsg] : []),
       ...history,
@@ -156,7 +156,7 @@ export class AiChatService {
 
     const sources = this.toCitedSources(answer, hits);
     this.logger.log(
-      `RAG 对话完成：hits=${hits.length}, cited=${sources.length}, answerLength=${answer.length}`,
+      `RAG chat completed: hits=${hits.length}, cited=${sources.length}, answerLength=${answer.length}`,
     );
 
     const session = user
@@ -207,7 +207,7 @@ export class AiChatService {
     return history;
   }
 
-  /** 从回答中抽出 [n]，只返回实际引用的资料；未标注时回退为全部召回（摘录）。 */
+  /** Extract [n] citations and return only cited sources; fall back to all excerpts when uncited. */
   private toCitedSources(answer: string, hits: ChunkHit[]): ChatSource[] {
     const cited = new Set<number>();
     for (const match of answer.matchAll(CITATION_RE)) {

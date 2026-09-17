@@ -1,42 +1,42 @@
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
-/** 文档列表查询 */
+/** Document list query. */
 export class QueryDocumentDto {
-  /** 标题（模糊） */
+  /** Fuzzy title filter. */
   @IsOptional()
   @IsString()
   title?: string;
 
-  /** 分类 ID */
+  /** Category ID. */
   @IsOptional()
   @IsString()
   categoryId?: string;
 
-  /** 团队 ID */
+  /** Team ID. */
   @IsOptional()
   @IsString()
   teamId?: string;
 
-  /** 作者 ID */
+  /** Author ID. */
   @IsOptional()
   @IsString()
   authorId?: string;
 
-  /** 状态 */
+  /** Status. */
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   status?: number;
 
-  /** 页码，从 1 开始 */
+  /** Page number, starting at 1. */
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number = 1;
 
-  /** 每页条数 */
+  /** Items per page. */
   @IsOptional()
   @Type(() => Number)
   @IsInt()

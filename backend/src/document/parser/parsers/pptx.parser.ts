@@ -3,10 +3,10 @@ import { parseOffice } from 'officeparser';
 import { cleanMarkdown, toMarkdownTable } from '../utils/markdown.util';
 
 /**
- * 将 PPTX 解析为 Markdown。
+ * Parse PPTX as Markdown.
  *
- * 优先走自研 ZIP/XML 路径（按幻灯片输出 `## 幻灯片 N` + 标题/正文/表格）；
- * 解压或提取失败时降级到 officeparser AST → md。
+ * Prefer the ZIP/XML path (`## Slide N` plus title, body, and tables for each slide).
+ * Fall back to officeparser AST -> Markdown when extraction fails.
  */
 export async function parsePptx(buffer: Buffer): Promise<string> {
   try {
@@ -16,7 +16,7 @@ export async function parsePptx(buffer: Buffer): Promise<string> {
   }
 }
 
-/** 降级路径：officeparser 统一转 Markdown */
+/** Fallback path: convert through officeparser. */
 async function parsePptxWithOfficeParser(buffer: Buffer): Promise<string> {
   const ast = await parseOffice(buffer, { fileType: 'pptx' });
   const { value } = await ast.to('md');
@@ -24,15 +24,15 @@ async function parsePptxWithOfficeParser(buffer: Buffer): Promise<string> {
 }
 
 /**
- * 自研路径：解压 PPTX（OOXML），按 slideN.xml 顺序提取。
+ * ZIP/XML path: unpack PPTX (OOXML) and extract slides in slideN.xml order.
  *
- * 单页结构：
- * 1. `## 幻灯片 N`
- * 2. 表格（Markdown table）
- * 3. title / ctrTitle 占位符 → `### 标题`
- * 4. 其余段落正文（已出现在标题中的文本跳过，避免重复）
+ * Slide structure:
+ * 1. `## Slide N`
+ * 2. Tables (Markdown tables).
+ * 3. title / ctrTitle placeholders -> `### Title`.
+ * 4. Remaining body paragraphs, excluding text already included in titles.
  *
- * 提取表格后会从 XML 中剔除 `<a:tbl>`，防止单元格文字再出现在正文里。
+ * Remove `<a:tbl>` from XML after extracting tables so cell text is not repeated in the body.
  */
 async function parsePptxWithZip(buffer: Buffer): Promise<string> {
   const zip = await JSZip.loadAsync(buffer);
@@ -41,21 +41,21 @@ async function parsePptxWithZip(buffer: Buffer): Promise<string> {
     .sort((a, b) => slideNumber(a) - slideNumber(b));
 
   if (slidePaths.length === 0) {
-    throw new Error('未找到 PPTX slide');
+    throw new Error('No PPTX slides found');
   }
 
   const parts: string[] = [];
 
   for (let i = 0; i < slidePaths.length; i++) {
     const xml = await zip.file(slidePaths[i])!.async('string');
-    parts.push(`## 幻灯片 ${i + 1}\n`);
+    parts.push(`## Slide ${i + 1}\n`);
 
     const tables = extractTables(xml);
     for (const table of tables) {
       parts.push(toMarkdownTable(table));
     }
 
-    // 去掉表格区域，避免单元格文本在正文中重复出现
+    // Remove table regions so cell text is not repeated in the body.
     const bodyXml = xml.replace(/<a:tbl[\s\S]*?<\/a:tbl>/g, '');
 
     const titleTexts = extractPlaceholderTexts(bodyXml, /ctrTitle|title/i);
@@ -80,20 +80,20 @@ async function parsePptxWithZip(buffer: Buffer): Promise<string> {
 
   const result = cleanMarkdown(parts.join('\n'));
   if (!result) {
-    throw new Error('PPTX 提取结果为空');
+    throw new Error('PPTX extraction returned no content');
   }
   return result;
 }
 
-/** 从路径 `ppt/slides/slide12.xml` 解析页码，供排序 */
+/** Parse a slide number from `ppt/slides/slide12.xml` for sorting. */
 function slideNumber(path: string): number {
   const m = path.match(/slide(\d+)\.xml$/i);
   return m ? Number(m[1]) : 0;
 }
 
 /**
- * 按段落提取文本：同一 `<a:p>` 内的多个 `<a:t>` run 合并，
- * `<a:br/>` 转为换行。
+ * Extract paragraph text: merge multiple `<a:t>` runs within an `<a:p>`,
+ * and convert `<a:br/>` to line breaks.
  */
 function extractParagraphTexts(xml: string): string[] {
   const paragraphs: string[] = [];
@@ -106,12 +106,12 @@ function extractParagraphTexts(xml: string): string[] {
 }
 
 /**
- * 从指定占位符类型的 shape 中提取文本（按段落合并）。
- * typePattern 通常匹配 title / ctrTitle。
+ * Extract text from shapes with the requested placeholder type, merging paragraphs.
+ * typePattern usually matches title / ctrTitle.
  */
 function extractPlaceholderTexts(xml: string, typePattern: RegExp): string[] {
   const texts: string[] = [];
-  // 按 shape 切开，再看 `<p:ph type="...">`
+  // Split by shape and inspect `<p:ph type="...">`.
   const shapes = xml.split(/<p:sp[\s>]/).slice(1);
   for (const shape of shapes) {
     const ph = shape.match(/<p:ph[^>]*\btype="([^"]+)"/i);
@@ -123,7 +123,7 @@ function extractPlaceholderTexts(xml: string, typePattern: RegExp): string[] {
   return texts;
 }
 
-/** 从 slide XML 中提取所有 `<a:tbl>`，归一为 string[][][]（多表 → 行 → 单元格） */
+/** Extract all `<a:tbl>` elements from slide XML as string[][][] (tables -> rows -> cells). */
 function extractTables(xml: string): string[][][] {
   const tables: string[][][] = [];
   const tableBlocks = xml.match(/<a:tbl[\s\S]*?<\/a:tbl>/g) ?? [];
@@ -135,7 +135,7 @@ function extractTables(xml: string): string[][][] {
       const cells: string[] = [];
       const tcBlocks = tr.match(/<a:tc[\s\S]*?<\/a:tc>/g) ?? [];
       for (const tc of tcBlocks) {
-        // 单元格内多段落用空格拼成一格
+        // Join multiple paragraphs in a cell with spaces.
         const cellParas = extractParagraphTexts(tc);
         cells.push(cellParas.join(' ').trim());
       }
@@ -147,7 +147,7 @@ function extractTables(xml: string): string[][][] {
   return tables;
 }
 
-/** 收集块内文本 run，并把显式换行 `<a:br/>` 转为 `\n` */
+/** Collect text runs in a block and convert explicit `<a:br/>` breaks to `\n`. */
 function extractRunsText(xml: string): string {
   let result = '';
   const re = /<a:br\s*\/>|<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g;
@@ -162,7 +162,7 @@ function extractRunsText(xml: string): string {
   return result;
 }
 
-/** OOXML 文本实体反转义 */
+/** Unescape OOXML text entities. */
 function decodeXml(text: string): string {
   return text
     .replace(/&lt;/g, '<')

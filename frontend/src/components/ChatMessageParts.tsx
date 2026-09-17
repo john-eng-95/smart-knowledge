@@ -45,7 +45,7 @@ export function sourcesFromParts(parts: KhUIMessage['parts']): ChatSource[] {
   return []
 }
 
-/** 只保留回答里实际标了 [n] 的资料，避免无关召回也占引用区 */
+/** Keep only sources cited as [n] in the answer so unrelated hits do not appear as citations. */
 export function citedSources(sources: ChatSource[], answer: string): ChatSource[] {
   const used = new Set(
     [...answer.matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1])),
@@ -232,7 +232,7 @@ function RetrieveCard({
   items: RetrieveHit[]
 }) {
   const count = items.length
-  const label = count ? '已检索可见知识库' : '未检索到你有权限的相关资料'
+  const label = count ? 'Visible knowledge base searched' : 'No permitted sources found'
 
   return (
     <details className="kh-web">
@@ -259,7 +259,7 @@ function RetrieveCard({
 function ThinkBlock({ text, streaming }: { text: string; streaming?: boolean }) {
   return (
     <details className="kh-think" open>
-      <summary>{streaming ? '思考中…' : '思考过程'}</summary>
+      <summary>{streaming ? 'Thinking…' : 'Reasoning'}</summary>
       <div className="kh-think-body">{text}</div>
     </details>
   )
@@ -281,7 +281,7 @@ function WebSearchCard({
   const output = asWebSearchResult(part.output)
   const failed = part.state === 'output-error' || Boolean(output?.error)
   const count = output?.items?.length ?? 0
-  const label = pending ? '正在搜索' : failed ? '搜索失败' : '已搜索'
+  const label = pending ? 'Searching' : failed ? 'Search failed' : 'Searched'
 
   return (
     <details className={`kh-web${pending ? ' pending' : ''}${failed ? ' failed' : ''}`}>
@@ -323,7 +323,7 @@ function asWebSearchResult(value: unknown): WebSearchResult | null {
   }
 }
 
-/** LangChain tool 结果经常是 JSON 字符串或带 content 的消息对象 */
+/** LangChain tool results are often JSON strings or message objects with content. */
 function parseToolPayload(value: unknown): Record<string, unknown> | null {
   if (typeof value === 'string') {
     try {

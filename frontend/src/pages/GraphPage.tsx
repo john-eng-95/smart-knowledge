@@ -63,7 +63,7 @@ export default function GraphPage() {
       setData(res)
       setSelected(null)
     } catch (error) {
-      message.error(error instanceof ApiError ? error.message : '图谱加载失败')
+      message.error(error instanceof ApiError ? error.message : 'Failed to load graph')
     } finally {
       setLoading(false)
     }
@@ -82,7 +82,7 @@ export default function GraphPage() {
           <Input
             allowClear
             prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-            placeholder="输入关键词检索你有权限的图谱…"
+            placeholder="Search the graph you are allowed to access…"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             onPressEnter={() => void load()}
@@ -90,7 +90,7 @@ export default function GraphPage() {
           />
           <Select
             allowClear
-            placeholder="节点类型"
+            placeholder="Node type"
             style={{ width: 150 }}
             value={entityType}
             onChange={(v) => {
@@ -121,16 +121,16 @@ export default function GraphPage() {
               })
             }}
           >
-            重置
+            Reset
           </Button>
           <Button type="primary" loading={loading} onClick={() => void load()}>
-            检索
+            Search
           </Button>
           <div style={{ flex: 1, color: '#8c8c8c', fontSize: 12 }}>
-            仅展示你有权限的文档及其实体
+            Shows only documents and entities you are allowed to access
           </div>
           <Button icon={<DownloadOutlined />} onClick={() => chartRef.current?.exportPng()}>
-            导出图谱
+            Export graph
           </Button>
         </div>
         <div className="kh-graph-canvas">
@@ -146,7 +146,7 @@ export default function GraphPage() {
               {loading ? (
                 <Spin />
               ) : (
-                <Empty description="暂无你有权限的图谱数据。发布文档后会写入 Neo4j。" />
+                <Empty description="No graph data is available. Publish documents to populate Neo4j." />
               )}
             </div>
           )}
@@ -157,28 +157,28 @@ export default function GraphPage() {
           ) : null}
           <div className="kh-graph-legend">
             <span>
-              <i style={{ background: '#1677ff' }} /> 文档
+              <i style={{ background: '#1677ff' }} /> Documents
             </span>
             <span>
-              <i style={{ background: '#52c41a' }} /> 知识点
+              <i style={{ background: '#52c41a' }} /> Entities
             </span>
             <span>
-              <i style={{ background: '#fa8c16' }} /> 人物
+              <i style={{ background: '#fa8c16' }} /> People
             </span>
             <span>
-              <i style={{ background: '#13c2c2' }} /> 组织
+              <i style={{ background: '#13c2c2' }} /> Organizations
             </span>
             <span>
-              <i style={{ background: '#722ed1' }} /> 标签
+              <i style={{ background: '#722ed1' }} /> Tags
             </span>
             <span>
-              <span className="kh-legend-line kh-legend-blue" /> 提及
+              <span className="kh-legend-line kh-legend-blue" /> Mentions
             </span>
             <span>
-              <span className="kh-legend-dash kh-legend-grey" /> 关联
+              <span className="kh-legend-dash kh-legend-grey" /> Related
             </span>
             <span>
-              <span className="kh-legend-dash kh-legend-purple" /> 标注
+              <span className="kh-legend-dash kh-legend-purple" /> Tagged
             </span>
           </div>
           <div className="kh-graph-zoom">
@@ -187,49 +187,49 @@ export default function GraphPage() {
             <Button size="small" icon={<CompressOutlined />} onClick={() => chartRef.current?.reset()} />
             <Button size="small" icon={<ReloadOutlined />} onClick={() => void load()} />
           </div>
-          <div className="kh-graph-hint">可拖拽节点，滚轮缩放；点击文档节点打开正文</div>
+          <div className="kh-graph-hint">Drag nodes, zoom with the wheel, or click a document node to open its content.</div>
         </div>
       </div>
       <aside className="kh-graph-side">
         <div className="kh-graph-card">
-          <h4>图谱数据统计</h4>
+          <h4>Graph statistics</h4>
           <div className="kh-graph-stats">
             <div>
               <b>{data.stats.documentCount}</b>
-              <span>文档节点</span>
+              <span>Document nodes</span>
             </div>
             <div>
               <b>{data.stats.entityCount}</b>
-              <span>知识点</span>
+              <span>Entities</span>
             </div>
             <div>
               <b>{data.stats.relatedCount}</b>
-              <span>实体关系</span>
+              <span>Entity relations</span>
             </div>
             <div>
               <b>{data.stats.mentionCount}</b>
-              <span>文档提及</span>
+              <span>Document mentions</span>
             </div>
             <div>
               <b>{data.stats.tagCount}</b>
-              <span>当前标签</span>
+              <span>Current tags</span>
             </div>
             <div>
               <b>{data.stats.edgeCount}</b>
-              <span>画布边数</span>
+              <span>Graph edges</span>
             </div>
           </div>
         </div>
         <div className="kh-graph-card">
-          <h4>知识点类型分布</h4>
+          <h4>Entity type distribution</h4>
           {data.stats.entityTypes.length ? (
             <EntityTypePie items={data.stats.entityTypes} />
           ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无" />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No data" />
           )}
         </div>
         <div className="kh-graph-card">
-          <h4>热门知识点 TOP5</h4>
+          <h4>Top 5 entities</h4>
           {data.topEntities.length ? (
             <ol className="kh-graph-rank">
               {data.topEntities.map((e, i) => (
@@ -241,11 +241,11 @@ export default function GraphPage() {
               ))}
             </ol>
           ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无" />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No data" />
           )}
         </div>
         <div className="kh-graph-card">
-          <h4>最近更新节点</h4>
+          <h4>Recently updated nodes</h4>
           {data.recentNodes.map((n) => (
             <div key={n.id} className="kh-graph-recent">
               <div>{n.name}</div>
@@ -255,20 +255,20 @@ export default function GraphPage() {
         </div>
         {selected ? (
           <div className="kh-graph-card">
-            <h4>当前节点</h4>
+            <h4>Selected node</h4>
             <Space direction="vertical" size={4}>
               <div>{selected.name}</div>
               <div style={{ color: '#8c8c8c', fontSize: 12 }}>
                 {selected.kind === 'document'
-                  ? '文档'
+                  ? 'Document'
                   : selected.kind === 'tag'
-                    ? '标签'
-                    : selected.type || '知识点'}
+                    ? 'Tag'
+                    : selected.type || 'Entity'}
               </div>
               {selected.description ? <div>{selected.description}</div> : null}
               {selected.documentId ? (
                 <Button type="link" style={{ padding: 0 }} onClick={() => navigate(`/documents/${selected.documentId}`)}>
-                  打开文档
+                  Open document
                 </Button>
               ) : null}
             </Space>

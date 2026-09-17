@@ -1,7 +1,7 @@
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
-/** 上传解析接口的可选表单字段（作者从 JWT 取，不在表单传） */
+/** Optional form fields for upload parsing (author comes from JWT, not the form). */
 export class UploadParseDto {
   @IsOptional()
   @IsString()

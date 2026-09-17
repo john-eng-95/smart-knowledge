@@ -50,7 +50,7 @@ export class UserController {
       dto.oldPassword,
       dto.newPassword,
     );
-    return { message: '密码修改成功' };
+    return { message: 'Password changed successfully' };
   }
 
   @Get('page')
@@ -82,14 +82,14 @@ export class UserController {
   @Roles(RoleCode.ADMIN)
   async deleteUser(@Param('id') id: string) {
     await this.userService.deleteUser(id);
-    return { message: '删除成功' };
+    return { message: 'Deleted successfully' };
   }
 
   @Put(':id/password/reset')
   @Roles(RoleCode.ADMIN)
   async resetPassword(@Param('id') id: string, @Body() dto: ResetPasswordDto) {
     await this.userService.resetPassword(id, dto.newPassword);
-    return { message: '密码重置成功' };
+    return { message: 'Password reset successfully' };
   }
 
   @Get(':id/roles')

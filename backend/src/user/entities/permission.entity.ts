@@ -31,7 +31,7 @@ export class PermissionEntity {
   })
   permissionCode: string;
 
-  /** 1 菜单 2 按钮 3 接口 */
+  /** 1 = menu, 2 = button, 3 = API. */
   @Column({ name: 'permission_type', type: 'smallint' })
   permissionType: number;
 

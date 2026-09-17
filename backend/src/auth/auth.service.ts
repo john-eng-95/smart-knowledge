@@ -123,25 +123,30 @@ export class AuthService {
         );
       } catch {
         await this.emailActivation.deleteByToken(token);
-        throw new BadRequestException('激活邮件发送失败，请稍后再试');
+        throw new BadRequestException(
+          'Failed to send the activation email. Please try again later.',
+        );
       }
       return {
         userId: result.userId,
-        message: '注册成功，请查收邮件激活账户',
+        message:
+          'Registration successful. Check your email to activate your account.',
         emailVerificationRequired: true,
       };
     }
 
     return {
       userId: result.userId,
-      message: '注册成功，请登录',
+      message: 'Registration successful. Please sign in.',
     };
   }
 
   async verifyEmail(token: string): Promise<{ message: string }> {
     const userId = await this.emailActivation.consumeToken(token);
     if (!userId) {
-      throw new BadRequestException('激活链接无效或已过期');
+      throw new BadRequestException(
+        'The activation link is invalid or expired.',
+      );
     }
     const message = await this.userService.activateEmail(userId);
     return { message };
@@ -150,13 +155,18 @@ export class AuthService {
   async sendResetCode(dto: SendResetCodeDto): Promise<{ message: string }> {
     const user = await this.userService.findByEmail(dto.email);
     if (!user) {
-      throw new NotFoundException('该邮箱未注册');
+      throw new NotFoundException(
+        'No account is registered with this email address.',
+      );
     }
 
-    // Redis 剩余 TTL：刚发出去时约 600s。剩余 > 540s 说明距上次发送不足 60s，拦截重复发送
+    // The initial Redis TTL is about 600 seconds. More than 540 seconds remaining means
+    // the previous code was sent less than 60 seconds ago, so block duplicate requests.
     const ttl = await this.passwordReset.getTtl(dto.email);
     if (ttl > RESET_CODE_TTL_SECONDS - RESET_CODE_COOLDOWN_SECONDS) {
-      throw new BadRequestException('验证码已发送，请稍后再试');
+      throw new BadRequestException(
+        'A verification code was already sent. Please try again later.',
+      );
     }
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -169,20 +179,24 @@ export class AuthService {
       );
     } catch {
       await this.passwordReset.delete(dto.email);
-      throw new BadRequestException('邮件发送失败，请稍后再试');
+      throw new BadRequestException(
+        'Failed to send the email. Please try again later.',
+      );
     }
-    return { message: '验证码已发送' };
+    return { message: 'Verification code sent.' };
   }
 
   async resetPasswordByEmail(
     dto: ResetPasswordByEmailDto,
   ): Promise<{ message: string }> {
     if (!(await this.passwordReset.verify(dto.email, dto.code))) {
-      throw new BadRequestException('验证码错误或已过期');
+      throw new BadRequestException(
+        'The verification code is invalid or expired.',
+      );
     }
     await this.userService.resetPasswordByEmail(dto.email, dto.newPassword);
     await this.passwordReset.delete(dto.email);
-    return { message: '密码重置成功，请登录' };
+    return { message: 'Password reset successful. Please sign in.' };
   }
 
   async refresh(refreshToken: string): Promise<LoginResult> {
@@ -190,10 +204,12 @@ export class AuthService {
     try {
       payload = this.jwtService.verify<TokenPayload>(refreshToken);
     } catch {
-      throw new UnauthorizedException('refresh token 无效或已过期');
+      throw new UnauthorizedException(
+        'The refresh token is invalid or expired.',
+      );
     }
     if (payload.type !== 'refresh') {
-      throw new UnauthorizedException('无效的 refresh token');
+      throw new UnauthorizedException('Invalid refresh token.');
     }
     const user = await this.userService.buildAuthUser(payload.sub);
     return this.buildLoginResult(user);

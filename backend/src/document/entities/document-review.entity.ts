@@ -1,17 +1,17 @@
 import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 import { bigintTransformer } from '../../common/transformers/bigint.transformer';
 
-/** 审核结果：1 通过，2 驳回 */
+/** Review result: 1 approved, 2 rejected. */
 export enum ReviewResult {
   Approved = 1,
   Rejected = 2,
 }
 
 /**
- * 文档审核记录（PostgreSQL kh_document_review）
+ * Document review record (PostgreSQL kh_document_review).
  *
- * 生命周期：submitForReview 创建（review_result=null）→ approve / reject 结案。
- * 同一 document_id 可有多条历史记录，但同时最多一条待审。
+ * Lifecycle: submitForReview creates it (review_result=null), then approve/reject closes it.
+ * A document may have many historical records but at most one pending record.
  */
 @Entity('kh_document_review')
 export class DocumentReviewEntity {
@@ -36,14 +36,14 @@ export class DocumentReviewEntity {
   @Column({ name: 'reviewer_name', type: 'varchar', nullable: true })
   reviewerName?: string | null;
 
-  /** NULL=待审，1=通过，2=驳回 */
+  /** NULL=pending, 1=approved, 2=rejected. */
   @Column({ name: 'review_result', type: 'smallint', nullable: true })
   reviewResult?: ReviewResult | null;
 
   @Column({ name: 'review_comment', type: 'varchar', nullable: true })
   reviewComment?: string | null;
 
-  /** 提交审核前的文档 status */
+  /** Document status before review submission. */
   @Column({ name: 'before_status', type: 'smallint' })
   beforeStatus: number;
 

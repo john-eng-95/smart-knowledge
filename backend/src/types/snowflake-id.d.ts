@@ -1,14 +1,14 @@
 declare module 'snowflake-id' {
   interface SnowflakeIdOptions {
-    /** 机器 ID（0–1023），分布式部署时各实例需唯一 */
+    /** Worker ID (0-1023); each instance must be unique in a distributed deployment. */
     mid?: number;
-    /** 纪元偏移（毫秒），会从当前时间中减去 */
+    /** Epoch offset in milliseconds, subtracted from the current time. */
     offset?: number;
   }
 
   class SnowflakeId {
     constructor(options?: SnowflakeIdOptions);
-    /** 生成雪花 ID 字符串（JS number 无法安全表示 64 位整数） */
+    /** Generate a Snowflake ID string because JS numbers cannot safely represent 64-bit integers. */
     generate(): string;
   }
 

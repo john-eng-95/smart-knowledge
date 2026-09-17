@@ -11,18 +11,18 @@ import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 import { RoleCodeValue } from '../common/constants/roles';
 
 /**
- * 角色守卫
+ * Role guard.
  *
- * <p>在 {@link JwtAuthGuard} 之后执行（同为 APP_GUARD，按注册顺序：先 JWT、后 Roles）。</p>
+ * <p>Runs after {@link JwtAuthGuard} (both are APP_GUARD providers, registered as JWT then roles).</p>
  *
- * <p>规则：</p>
+ * <p>Rules:</p>
  * <ul>
- *   <li>接口未标 {@link Roles} → 放行（仅要求已登录）</li>
- *   <li>接口标了 {@code @Roles('ROLE_REVIEWER', ...)} → request.user.roles 须命中其一</li>
- *   <li>不满足 → 403 权限不足</li>
+ *   <li>Endpoints without {@link Roles} metadata are allowed for authenticated users.</li>
+ *   <li>Endpoints marked with {@code @Roles('ROLE_REVIEWER', ...)} require a matching request.user.roles entry.</li>
+ *   <li>Otherwise, return 403 Forbidden.</li>
  * </ul>
  *
- * <p>示例：文档审核 approve/reject 需 {@code ROLE_REVIEWER} 或 {@code ROLE_ADMIN}。</p>
+ * <p>Example: document approve/reject requires {@code ROLE_REVIEWER} or {@code ROLE_ADMIN}.</p>
  */
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -46,12 +46,12 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<{ user?: AuthUser }>();
     const user = request.user;
     if (!user?.roles?.length) {
-      throw new ForbiddenException('权限不足');
+      throw new ForbiddenException('Insufficient permissions');
     }
 
     const ok = requiredRoles.some((role) => user.roles.includes(role));
     if (!ok) {
-      throw new ForbiddenException('权限不足');
+      throw new ForbiddenException('Insufficient permissions');
     }
     return true;
   }

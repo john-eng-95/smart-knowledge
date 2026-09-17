@@ -27,7 +27,7 @@ export default function SearchPage() {
   async function runSearch(nextPage = 1) {
     const q = keyword.trim()
     if (!q) {
-      message.warning('请输入关键词')
+      message.warning('Enter a search term')
       return
     }
     setLoading(true)
@@ -45,7 +45,7 @@ export default function SearchPage() {
       setPage(nextPage)
       setElapsed((performance.now() - started) / 1000)
     } catch (error) {
-      message.error(error instanceof ApiError ? error.message : '搜索失败')
+      message.error(error instanceof ApiError ? error.message : 'Search failed')
     } finally {
       setLoading(false)
     }
@@ -54,41 +54,41 @@ export default function SearchPage() {
   return (
     <div className="kh-page">
       <p className="kh-access-hint">
-        只会检索你有权限的已发布文档：公开、所在团队，以及自己写的。
+        Searches only published documents you are allowed to access: public, team-shared, or authored by you.
       </p>
       <div className="kh-search-bar">
         <Input
           size="large"
           allowClear
           prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-          placeholder="输入关键词，检索你有权限的文档"
+          placeholder="Search documents you are allowed to access"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           onPressEnter={() => void runSearch(1)}
         />
         <Button type="primary" size="large" loading={loading} onClick={() => void runSearch(1)}>
-          搜索
+          Search
         </Button>
       </div>
       <div className="kh-filters">
         <Input
           allowClear
           style={{ width: 180 }}
-          placeholder="分类 ID"
+          placeholder="Category ID"
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value || undefined)}
         />
         <Select
           allowClear
           style={{ width: 160 }}
-          placeholder="文档状态"
+          placeholder="Document status"
           value={status}
           onChange={setStatus}
           options={[
-            { value: 1, label: '已发布' },
-            { value: 0, label: '草稿' },
-            { value: 3, label: '待审核' },
-            { value: 2, label: '已归档' },
+            { value: 1, label: 'Published' },
+            { value: 0, label: 'Draft' },
+            { value: 3, label: 'Pending review' },
+            { value: 2, label: 'Archived' },
           ]}
         />
         <Button
@@ -97,21 +97,21 @@ export default function SearchPage() {
             setStatus(undefined)
           }}
         >
-          清空
+          Clear
         </Button>
       </div>
 
       {elapsed !== null ? (
         <div className="kh-result-meta">
           <span>
-            找到约 {total} 条可见结果（用时 {elapsed.toFixed(2)} 秒）
+            About {total} visible results found ({elapsed.toFixed(2)}s)
           </span>
-          <span>相关度排序</span>
+          <span>Sorted by relevance</span>
         </div>
       ) : null}
 
       {!items.length && elapsed !== null ? (
-        <Empty description="没有匹配的可见文档" />
+        <Empty description="No matching visible documents" />
       ) : null}
 
       {items.map((hit) => {
@@ -139,10 +139,10 @@ export default function SearchPage() {
               ) : null}
               <div className="kh-hit-meta">
                 <span>
-                  <FolderOutlined /> 来自文档库
+                  <FolderOutlined /> From document library
                 </span>
                 <span>
-                  <ClockCircleOutlined /> 更新时间: {formatTime(hit.publishTime)}
+                  <ClockCircleOutlined /> Updated: {formatTime(hit.publishTime)}
                 </span>
                 {statusMeta ? <Tag color={statusMeta.color}>{statusMeta.label}</Tag> : null}
                 <Tag color={vis.color}>{vis.label}</Tag>

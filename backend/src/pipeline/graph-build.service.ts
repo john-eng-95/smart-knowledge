@@ -17,23 +17,23 @@ import {
 } from '../document/document-access';
 
 /**
- * KG 知识图谱构建
+ * KG knowledge graph builder.
  *
- * <p>图模型（简化）：</p>
+ * <p>Simplified graph model:</p>
  * <pre>
  * (KnowledgeDocument)-[:HAS_CHUNK]->(DocumentChunk)-[:MENTIONS]->(KnowledgeEntity)
  * (KnowledgeEntity)-[:RELATED_TO]->(KnowledgeEntity)
  * </pre>
  *
- * <p>单篇构建步骤：</p>
+ * <p>Single-document build steps:</p>
  * <ol>
- *   <li>删除该文档旧图数据（clear before build）</li>
- *   <li>MERGE 文档节点</li>
- *   <li>ChunkingService 分块 → 每块建 DocumentChunk + HAS_CHUNK</li>
- *   <li>ExtractionService 抽实体关系 → MERGE 实体 / RELATED_TO / MENTIONS</li>
+ *   <li>Delete existing graph data for the document (clear before build).</li>
+ *   <li>MERGE the document node.</li>
+ *   <li>Chunk with ChunkingService -> create DocumentChunk + HAS_CHUNK for each chunk.</li>
+ *   <li>Extract entities/relations -> MERGE entities / RELATED_TO / MENTIONS.</li>
  * </ol>
  *
- * Neo4j 不可用时跳过写入（不抛错阻断发布消费）。
+ * Skip writes when Neo4j is unavailable so publication consumption is not blocked.
  */
 @Injectable()
 export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
@@ -51,7 +51,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     if (!this.enabled) {
-      this.logger.warn('Neo4j 已禁用（NEO4J_ENABLED=false）');
+      this.logger.warn('Neo4j is disabled (NEO4J_ENABLED=false)');
       return;
     }
     const uri = this.config.get<string>('NEO4J_URI', 'bolt://localhost:7687');
@@ -63,10 +63,10 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
     this.driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
     try {
       await this.driver.verifyConnectivity();
-      this.logger.log(`Neo4j 已连接：${uri}`);
+      this.logger.log(`Neo4j connected: ${uri}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Neo4j 不可用，KG 写入将跳过：${message}`);
+      this.logger.warn(`Neo4j unavailable; skipping KG writes: ${message}`);
       await this.driver.close();
       this.driver = null;
     }
@@ -77,31 +77,35 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 为单篇文档全量重建图谱。
-   * @returns 写入的实体数量（近似）
+   * Rebuild the graph for one document.
+   * @returns Approximate number of entities written.
    */
   async buildForDocument(doc: PipelineDocument): Promise<number> {
     if (!this.driver) {
-      this.logger.warn(`跳过 KG 构建（Neo4j 不可用）：documentId=${doc.id}`);
+      this.logger.warn(
+        `Skipping KG build (Neo4j unavailable): documentId=${doc.id}`,
+      );
       return 0;
     }
     if (!doc.content?.trim()) {
-      this.logger.log(`文档内容为空，跳过 KG：documentId=${doc.id}`);
+      this.logger.log(
+        `Document content is empty; skipping KG: documentId=${doc.id}`,
+      );
       return 0;
     }
 
-    // 先清再建，避免重复发布导致边/节点翻倍
+    // Clear before rebuilding so repeated publication does not duplicate nodes or edges.
     await this.deleteForDocument(doc.id);
 
     const session = this.driver.session();
     const now = new Date().toISOString();
     try {
-      // ① 文档节点：按 id 幂等 upsert，保留首次 createdAt
+      // 1. Document node: idempotent upsert by id, preserving the initial createdAt.
       await session.run(
         `
-        // 以文档业务 id 为唯一键：存在则命中，不存在则创建
+        // Use the document business ID as the unique key.
         MERGE (d:KnowledgeDocument {id: $id})
-        // 每次重建都刷新可变元数据；createdAt 仅首次写入
+        // Refresh mutable metadata on every rebuild; write createdAt only on creation.
         SET d.title = $title, d.summary = $summary, d.categoryId = $categoryId,
             d.authorId = $authorId, d.teamId = $teamId, d.isPublic = $isPublic,
             d.status = $status, d.tags = $tags,
@@ -121,7 +125,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
         },
       );
 
-      // ② 复用 RAG 同款分块，保证图谱粒度与向量块一致
+      // 2. Reuse RAG chunking so graph and vector chunk granularity match.
       const chunks = await this.chunkingService.chunk({
         content: doc.content,
         documentId: doc.id,
@@ -141,18 +145,18 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
 
       let totalEntities = 0;
       for (const chunk of chunks) {
-        // ③ chunk 节点 + 文档→块边：Document -[HAS_CHUNK]-> Chunk
+        // 3. Chunk node and document -> chunk edge: Document -[HAS_CHUNK]-> Chunk.
         await session.run(
           `
-          // 以全局唯一 chunkId 幂等创建/更新块节点
+          // Idempotently create or update the chunk node by globally unique chunkId.
           MERGE (c:DocumentChunk {chunkId: $chunkId})
           SET c.documentId = $documentId, c.content = $content, c.heading = $heading,
               c.chunkIndex = $chunkIndex, c.totalChunks = $totalChunks, c.updatedAt = $now
-          // 携带 c 进入下一子句，避免丢失当前块上下文
+          // Carry c into the next clause so the current chunk context is retained.
           WITH c
-          // 找到所属文档（① 已保证存在）
+          // Find the owning document (guaranteed to exist by step 1).
           MATCH (d:KnowledgeDocument {id: $documentId})
-          // 文档→块 一对多边；边属性记序号便于按序遍历
+          // One-to-many document -> chunk edge; store the index for ordered traversal.
           MERGE (d)-[r:HAS_CHUNK]->(c)
           SET r.chunkIndex = $chunkIndex
           `,
@@ -167,7 +171,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
           },
         );
 
-        // ④ 抽实体关系并落图；单块失败不阻断其余块（图已先清过）
+        // 4. Extract entities and relations; one failed chunk must not block the rest.
         let extracted: ExtractionResult;
         try {
           extracted = await this.extractionService.extract(
@@ -179,20 +183,20 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
           const message =
             error instanceof Error ? error.message : String(error);
           this.logger.error(
-            `KG 抽取失败，跳过该块：documentId=${doc.id}, chunk=${chunk.chunkIndex}, ${message}`,
+            `KG extraction failed; skipping chunk: documentId=${doc.id}, chunk=${chunk.chunkIndex}, ${message}`,
           );
           extracted = { entities: [], relations: [] };
         }
-        // 绑定当前块，writeExtraction 才能建 MENTIONS
+        // Bind the current chunk so writeExtraction can create MENTIONS edges.
         extracted.chunkId = chunk.chunkId;
-        // 写入 Neo4j：实体节点 / MENTIONS / RELATED_TO
+        // Write entity nodes, MENTIONS edges, and RELATED_TO edges to Neo4j.
         const written = await this.writeExtraction(session, extracted);
-        // 累加本块实体数，仅用于日志；图数据已在上一行入库
+        // Accumulate entities for logging; graph data was persisted above.
         totalEntities += written;
       }
 
       this.logger.log(
-        `KG 图谱构建完成：documentId=${doc.id}, chunks=${chunks.length}, entities=${totalEntities}`,
+        `KG graph build completed: documentId=${doc.id}, chunks=${chunks.length}, entities=${totalEntities}`,
       );
       return totalEntities;
     } finally {
@@ -200,26 +204,26 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** 批量建图：单篇失败只记日志 */
+  /** Build graphs in batch; log individual document failures. */
   async buildBatch(docs: PipelineDocument[]) {
     for (const doc of docs) {
       try {
         await this.buildForDocument(doc);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.error(`KG 构建失败：documentId=${doc.id}, ${message}`);
+        this.logger.error(`KG build failed: documentId=${doc.id}, ${message}`);
       }
     }
   }
 
-  /** 已发布文档只改公开/团队时，只刷文档节点属性，不必抽实体重建 */
+  /** Update only document-node visibility for published documents without re-extracting entities. */
   async updateVisibility(
     documentId: string,
     vis: { isPublic: boolean; teamId: string | null; authorId: string | null },
   ) {
     if (!this.driver) {
       this.logger.warn(
-        `跳过图谱可见性更新（Neo4j 不可用）：documentId=${documentId}`,
+        `Skipping graph visibility update (Neo4j unavailable): documentId=${documentId}`,
       );
       return;
     }
@@ -239,11 +243,11 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
           now: new Date().toISOString(),
         },
       );
-      this.logger.log(`图谱可见性已更新：documentId=${documentId}`);
+      this.logger.log(`Graph visibility updated: documentId=${documentId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `图谱可见性更新失败：documentId=${documentId}, ${message}`,
+        `Graph visibility update failed: documentId=${documentId}, ${message}`,
       );
     } finally {
       await session.close();
@@ -251,47 +255,47 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 删除文档及其 chunk；再清理「已无人提及」的孤儿实体，避免图膨胀。
+   * Delete a document and its chunks, then remove orphan entities with no MENTIONS edges.
    */
   async deleteForDocument(documentId: string) {
     if (!this.driver) return;
     const session = this.driver.session();
     try {
-      // 删除文档节点及其所有 chunk（DETACH 会一并拆掉相连关系边）
+      // Delete the document and all chunks; DETACH removes connected edges as well.
       await session.run(
         `
-        // 定位待删文档
+        // Locate the document to delete.
         MATCH (d:KnowledgeDocument {id: $id})
-        // 可选匹配下属块：无 chunk 时仍可删文档
+        // Match child chunks when present; the document can still be deleted without chunks.
         OPTIONAL MATCH (d)-[:HAS_CHUNK]->(c:DocumentChunk)
-        // DETACH DELETE：先删节点上的所有关系，再删节点本身
-        // 会清掉 HAS_CHUNK 等与 c/d 相连的边
+        // DETACH DELETE removes all node relationships before deleting the node.
+        // This clears HAS_CHUNK and other edges connected to c/d.
         DETACH DELETE c, d
         `,
         { id: documentId },
       );
-      // 孤儿实体清理：没有任何 chunk MENTIONS 的实体视为无引用，整节点删除
+      // Orphan cleanup: entities with no chunk MENTIONS edges are unreferenced and can be deleted.
       await session.run(
         `
         MATCH (e:KnowledgeEntity)
-        // 入边 MENTIONS 为空 ⇒ 已无任何文档块引用该实体
+        // No incoming MENTIONS edges means no document chunk references the entity.
         WHERE NOT (e)<-[:MENTIONS]-()
-        // DETACH 同时清掉 RELATED_TO 等残留关系，避免悬空边
+        // DETACH also clears leftover RELATED_TO edges and prevents dangling edges.
         DETACH DELETE e
         `,
       );
-      this.logger.log(`KG 图谱已删除：documentId=${documentId}`);
+      this.logger.log(`KG graph deleted: documentId=${documentId}`);
     } finally {
       await session.close();
     }
   }
 
   /**
-   * 查询实体节点。Neo4j 不可用时返回 []。
+   * Query entity nodes. Return [] when Neo4j is unavailable.
    */
   async listNodes(type?: string, limit = 200, scope?: DocumentAccessScope) {
     if (!this.driver) {
-      this.logger.warn('跳过图谱节点查询（Neo4j 不可用）');
+      this.logger.warn('Skipping graph node query (Neo4j unavailable)');
       return [];
     }
     const cap = Math.min(Math.max(limit, 1), 500);
@@ -325,7 +329,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`图谱节点查询失败：${message}`);
+      this.logger.warn(`Graph node query failed: ${message}`);
       return [];
     } finally {
       await session.close();
@@ -333,11 +337,11 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 查询实体间 RELATED_TO 边。Neo4j 不可用时返回 []。
+   * Query RELATED_TO edges between entities. Return [] when Neo4j is unavailable.
    */
   async listEdges(limit = 500, scope?: DocumentAccessScope) {
     if (!this.driver) {
-      this.logger.warn('跳过图谱边查询（Neo4j 不可用）');
+      this.logger.warn('Skipping graph edge query (Neo4j unavailable)');
       return [];
     }
     const cap = Math.min(Math.max(limit, 1), 1000);
@@ -370,7 +374,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`图谱边查询失败：${message}`);
+      this.logger.warn(`Graph edge query failed: ${message}`);
       return [];
     } finally {
       await session.close();
@@ -378,12 +382,12 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 图谱关键词检索：匹配实体名/描述、文档标题/摘要、块标题/正文。
-   * Neo4j 不可用或关键词为空时返回 []。
+   * Graph keyword search: match entity names/descriptions, document titles/summaries, and chunk headings/content.
+   * Return [] when Neo4j is unavailable or the keyword is empty.
    */
   async searchGraph(keyword: string, limit = 50, scope?: DocumentAccessScope) {
     if (!this.driver) {
-      this.logger.warn('跳过图谱检索（Neo4j 不可用）');
+      this.logger.warn('Skipping graph search (Neo4j unavailable)');
       return [];
     }
     const kw = keyword.trim();
@@ -447,7 +451,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`图谱检索失败：${message}`);
+      this.logger.warn(`Graph search failed: ${message}`);
       return [];
     } finally {
       await session.close();
@@ -455,8 +459,8 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 全景图：文档 + 被提及实体 + 标签，不含 chunk（块太碎，不适合画布）。
-   * 文档→实体 为「提及」，实体→实体 为 RELATED_TO 上的 relation，文档→标签 为「标注」。
+   * Graph overview: documents, mentioned entities, and tags; chunks are omitted because they are too granular for the canvas.
+   * Document -> entity is "mentions", entity -> entity uses the RELATED_TO relation, and document -> tag is "tagged".
    */
   async getOverview(params: {
     keyword?: string;
@@ -507,7 +511,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
     };
 
     if (!this.driver) {
-      this.logger.warn('跳过图谱全景（Neo4j 不可用）');
+      this.logger.warn('Skipping graph overview (Neo4j unavailable)');
       return empty;
     }
 
@@ -520,7 +524,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
     const session = this.driver.session();
 
     try {
-      // 全库统计：仅统计当前用户可见文档及其提及
+      // Global statistics: count only documents and mentions visible to the current user.
       const statsResult = await session.run(
         `
         OPTIONAL MATCH (d:KnowledgeDocument)
@@ -553,7 +557,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
       const relatedCount = this.toNumber(statsRow?.get('relatedCount'), 0);
       const mentionCount = this.toNumber(statsRow?.get('mentionCount'), 0);
 
-      // 按实体 type 分组计数，供前端筛选
+      // Group counts by entity type for frontend filtering.
       const typeRows = await session.run(
         `
         MATCH (d:KnowledgeDocument)-[:HAS_CHUNK]->(:DocumentChunk)-[:MENTIONS]->(e:KnowledgeEntity)
@@ -569,7 +573,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
         count: this.toNumber(record.get('count'), 0),
       }));
 
-      // 被文档块 MENTIONS 最多的 5 个实体（degree = 提及次数）
+      // Five entities with the most document-chunk MENTIONS (degree = mention count).
       const topRows = await session.run(
         `
         MATCH (e:KnowledgeEntity)<-[:MENTIONS]-(:DocumentChunk)<-[:HAS_CHUNK]-(d:KnowledgeDocument)
@@ -586,7 +590,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
         degree: this.toNumber(record.get('degree'), 0),
       }));
 
-      // 最近更新的 8 篇文档（不受 keyword / 时间 / 类型过滤）
+      // Eight recently updated documents, unaffected by keyword/time/type filters.
       const recentRows = await session.run(
         `
         MATCH (d:KnowledgeDocument)
@@ -604,7 +608,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
         updatedAt: (record.get('updatedAt') as string) ?? null,
       }));
 
-      // 主查询：按标题/摘要/标签 + 时间筛文档，LIMIT 后挂上 MENTIONS 实体（可按 entityType 再筛）
+      // Main query: filter documents by title/summary/tags and time, then attach MENTIONS entities after LIMIT.
       const docRows = await session.run(
         `
         MATCH (d:KnowledgeDocument)
@@ -635,7 +639,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
 
       const docRecords = [...docRows.records];
 
-      // 关键词命中实体但标题未命中时，把提及该实体的文档补进来
+      // Add documents that mention a keyword-matched entity when the document title did not match.
       if (kw) {
         const extra = await session.run(
           `
@@ -732,7 +736,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
             kind: 'tag',
             type: 'TAG',
           });
-          addEdge(docNodeId, tagId, '标注', 'tagged');
+          addEdge(docNodeId, tagId, 'tagged', 'tagged');
         }
         const entities = record.get('entities') as Array<{
           name?: string;
@@ -750,12 +754,12 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
             type: entity.type ?? 'CONCEPT',
             description: entity.description ?? null,
           });
-          addEdge(docNodeId, entityId, '提及', 'mentions');
+          addEdge(docNodeId, entityId, 'mentions', 'mentions');
         }
       }
 
       if (entityNames.size > 0) {
-        // 只取当前画布上实体之间的 RELATED_TO，避免拉全库关系
+        // Keep RELATED_TO edges only between entities currently on the canvas.
         const relatedRows = await session.run(
           `
           MATCH (a:KnowledgeEntity)-[r:RELATED_TO]->(b:KnowledgeEntity)
@@ -769,7 +773,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
         for (const record of relatedRows.records) {
           const source = `entity:${record.get('source') as string}`;
           const target = `entity:${record.get('target') as string}`;
-          const relation = (record.get('relation') as string) || '关联';
+          const relation = (record.get('relation') as string) || 'related';
           addEdge(source, target, relation, 'related');
         }
       }
@@ -797,7 +801,7 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`图谱全景查询失败：${message}`);
+      this.logger.warn(`Graph overview query failed: ${message}`);
       return empty;
     } finally {
       await session.close();
@@ -811,8 +815,8 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 把抽取结果写入 Neo4j：
-   * - KnowledgeEntity（按 name MERGE，跨文档可复用同名实体）
+   * Write extraction results to Neo4j:
+   * - KnowledgeEntity (MERGE by name so same-named entities can be shared across documents).
    * - DocumentChunk -[:MENTIONS]-> Entity
    * - Entity -[:RELATED_TO]-> Entity
    */

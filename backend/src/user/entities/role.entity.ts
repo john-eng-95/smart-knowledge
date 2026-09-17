@@ -1,7 +1,7 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
 import { bigintTransformer } from '../../common/transformers/bigint.transformer';
 
-/** 角色（PostgreSQL kh_role） */
+/** Role entity (PostgreSQL kh_role). */
 @Entity('kh_role')
 export class RoleEntity {
   @PrimaryColumn({ type: 'bigint', transformer: bigintTransformer })

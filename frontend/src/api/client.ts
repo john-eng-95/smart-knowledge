@@ -73,13 +73,13 @@ export async function request<T>(
     const ok = await tryRefresh()
     if (ok) return request<T>(path, init, false)
     clearAuth()
-    throw new ApiError(401, '未登录或登录已过期')
+    throw new ApiError(401, 'Not signed in or session expired')
   }
 
   const text = await res.text()
   const data = text ? (JSON.parse(text) as unknown) : null
   if (!res.ok) {
-    throw new ApiError(res.status, errorMessage(data, res.statusText || '请求失败'))
+    throw new ApiError(res.status, errorMessage(data, res.statusText || 'Request failed'))
   }
   return data as T
 }

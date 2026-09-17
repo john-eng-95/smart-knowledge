@@ -1,52 +1,52 @@
 import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 import { DocumentStatus } from '../document-status';
 
-/** 创建文档（status 见 DocumentStatus，开启审核时不允许直接 Published） */
+/** Create a document (see DocumentStatus; direct Published is forbidden when review is enabled). */
 export class CreateDocumentDto {
-  /** 标题 */
+  /** Title. */
   @IsString()
   title: string;
 
-  /** Markdown 正文 */
+  /** Markdown content. */
   @IsString()
   content: string;
 
-  /** 摘要 */
+  /** Summary. */
   @IsOptional()
   @IsString()
   summary?: string;
 
-  /** 分类 ID */
+  /** Category ID. */
   @IsOptional()
   @IsString()
   categoryId?: string;
 
-  /** 团队 ID */
+  /** Team ID. */
   @IsOptional()
   @IsString()
   teamId?: string;
 
-  /** 封面图 URL */
+  /** Cover image URL. */
   @IsOptional()
   @IsString()
   coverImage?: string;
 
-  /** 标签（逗号分隔） */
+  /** Comma-separated tags. */
   @IsOptional()
   @IsString()
   tags?: string;
 
-  /** 状态 */
+  /** Status. */
   @IsOptional()
   @IsEnum(DocumentStatus)
   status?: DocumentStatus;
 
-  /** 备注 */
+  /** Notes. */
   @IsOptional()
   @IsString()
   remark?: string;
 
-  /** 是否公开 */
+  /** Whether the document is public. */
   @IsOptional()
   @IsBoolean()
   isPublic?: boolean;

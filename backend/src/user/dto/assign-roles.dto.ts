@@ -1,6 +1,6 @@
 import { ArrayNotEmpty, IsArray, IsString } from 'class-validator';
 
-/** 全量替换用户角色 */
+/** Replace all roles assigned to a user. */
 export class AssignRolesDto {
   @IsArray()
   @ArrayNotEmpty()

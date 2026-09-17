@@ -12,7 +12,7 @@ const ICONS: Record<string, { bg: string; label: string; fontSize: number }> = {
 
 const FALLBACK = { bg: '#90A4AE', label: 'DOC', fontSize: 7 }
 
-/** 从文件名 / 标题截取后缀；没有或无法识别时按 md */
+/** Extract the extension from a filename or title; fall back to md when unknown. */
 export function extFromName(name?: string | null) {
   if (!name) return 'md'
   const base = name.split(/[/\\]/).pop() || name
@@ -30,7 +30,7 @@ export function fileTypeLabel(name?: string | null) {
   return key.toUpperCase()
 }
 
-/** 按文件名后缀画圆角色块图标（PDF / W / X / P） */
+/** Render a rounded file-type icon from the filename extension (PDF / W / X / P). */
 export function FileTypeIcon({ name, size = 22 }: { name?: string | null; size?: number }) {
   const spec = ICONS[extFromName(name)] ?? FALLBACK
   return (

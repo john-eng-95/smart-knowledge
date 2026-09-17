@@ -14,17 +14,17 @@ import {
 import { ExtractionResult } from './types/pipeline.types';
 
 /**
- * 实体 / 关系抽取服务
+ * Entity and relation extraction service.
  *
- * <p>供 KG 建图使用：从每个 chunk 抽「实体 + 关系」，再写入 Neo4j。</p>
- * <p>ChatOpenAI.withStructuredOutput，不指定 method：qwen-plus 默认 jsonSchema。</p>
+ * <p>Used by KG building: extract entities and relations from each chunk, then write them to Neo4j.</p>
+ * <p>ChatOpenAI.withStructuredOutput with no method specified; qwen-plus defaults to jsonSchema.</p>
  *
- * <p>环境变量：OPENAI_API_KEY / OPENAI_BASE_URL / MODEL_NAME / KG_MAX_ENTITIES / KG_MAX_RELATIONS / KG_LLM_TIMEOUT_MS</p>
+ * <p>Environment variables: OPENAI_API_KEY / OPENAI_BASE_URL / MODEL_NAME / KG_MAX_ENTITIES / KG_MAX_RELATIONS / KG_LLM_TIMEOUT_MS</p>
  */
 @Injectable()
 export class ExtractionService {
   private readonly logger = new Logger(ExtractionService.name);
-  /** 单 chunk 最多实体数，防止图爆炸 */
+  /** Maximum entities per chunk to prevent graph explosion. */
   private readonly maxEntities: number;
   private readonly maxRelations: number;
   private readonly structuredLlm?: Runnable<
@@ -60,7 +60,7 @@ export class ExtractionService {
       temperature: 0.1,
       timeout: timeoutMs,
       maxRetries: 0,
-      // DashScope 走 Chat Completions，不要切 OpenAI Responses API
+      // Use Chat Completions for DashScope; do not switch to the OpenAI Responses API.
       useResponsesApi: false,
       configuration: { baseURL: baseUrl },
     });
@@ -71,10 +71,10 @@ export class ExtractionService {
   }
 
   /**
-   * 对单个 chunk 做抽取。
-   * @param content chunk 正文
-   * @param heading 所属章节标题（给 LLM 当上下文）
-   * @param documentTitle 文档标题
+   * Extract entities and relations from one chunk.
+   * @param content Chunk content.
+   * @param heading Section heading supplied as LLM context.
+   * @param documentTitle Document title.
    */
   async extract(
     content: string,
@@ -89,7 +89,8 @@ export class ExtractionService {
   }
 
   /**
-   * LLM 抽取：system 约束规则，user 塞标题+正文（截断 4000 字防超上下文）。
+   * LLM extraction: system prompt provides rules and the user message contains title and content,
+   * truncated to 4,000 characters to protect the context window.
    */
   private async extractByLlm(
     content: string,
@@ -98,7 +99,7 @@ export class ExtractionService {
   ): Promise<ExtractionResult> {
     if (!this.structuredLlm) {
       throw new Error(
-        'KG 抽取未配置 API Key（OPENAI_API_KEY / LLM_API_KEY / DASHSCOPE_API_KEY）',
+        'No API key is configured for KG extraction (OPENAI_API_KEY / LLM_API_KEY / DASHSCOPE_API_KEY)',
       );
     }
 
@@ -106,7 +107,7 @@ export class ExtractionService {
       this.maxEntities,
       this.maxRelations,
     );
-    const user = `文档标题: ${documentTitle}\n章节: ${heading ?? '无'}\n\n内容:\n${content.slice(0, 4000)}`;
+    const user = `Document title: ${documentTitle}\nSection: ${heading ?? 'None'}\n\nContent:\n${content.slice(0, 4000)}`;
 
     const started = Date.now();
     const parsed = await this.structuredLlm.invoke([
@@ -114,13 +115,13 @@ export class ExtractionService {
       new HumanMessage(user),
     ]);
     this.logger.log(
-      `KG 抽取完成：title=${documentTitle}, elapsed=${Date.now() - started}ms, chars=${content.length}, entities=${parsed.entities?.length ?? 0}`,
+      `KG extraction completed: title=${documentTitle}, elapsed=${Date.now() - started}ms, chars=${content.length}, entities=${parsed.entities?.length ?? 0}`,
     );
 
     return this.toExtractionResult(parsed);
   }
 
-  /** 截断数量、规范化类型、丢掉挂空实体的关系 */
+  /** Limit counts, normalize types, and discard relations with missing entities. */
   private toExtractionResult(parsed: KgExtractionLlmOutput): ExtractionResult {
     const entityNames = new Set<string>();
     const entities: ExtractionResult['entities'] = [];

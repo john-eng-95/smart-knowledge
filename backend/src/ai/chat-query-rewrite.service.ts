@@ -12,23 +12,27 @@ import { compactRewriteContext } from './chat-memory.util';
 const rewriteSchema = z.object({
   standalone_query: z
     .string()
-    .describe('可独立检索的一句中文短查询，消解指代和省略，不含寒暄'),
+    .describe(
+      'A standalone short search query in English that resolves references and omissions without greetings',
+    ),
   need_retrieve: z
     .boolean()
-    .describe('是否需要查知识库。寒暄、致谢、与制度无关的闲聊为 false'),
+    .describe(
+      'Whether to search the knowledge base. Use false for greetings, thanks, and policy-unrelated conversation',
+    ),
 });
 
 const REWRITE_PROMPT =
-  '你是企业知识库的检索改写器。根据对话把当前问题改写成一条可独立检索的短查询。\n' +
+  'You rewrite the current question into a standalone short search query for an enterprise knowledge base.\n' +
   '\n' +
-  '## 要求\n' +
-  '- 消解「这个 / 那个 / 谁负责 / 怎么办」等指代，补全省略的主题\n' +
-  '- 只保留检索需要的实体、事项、动作，一句中文，尽量不超过 40 字\n' +
-  '- 不要编造上文没出现的专有名词、条款号、系统名\n' +
-  '- 不要复述助手给出的制度条文、时限、流程细节\n' +
-  '- 当前问题已经完整、不依赖上文时，standalone_query 用原问题略作精炼即可\n' +
-  '- 寒暄、致谢、与知识库无关 → need_retrieve=false，standalone_query 仍给原问题\n' +
-  '- 输出不要解释';
+  '## Requirements\n' +
+  '- Resolve references such as "this", "that", "who is responsible", and "what should I do", and restore omitted topics.\n' +
+  '- Keep only searchable entities, subjects, and actions in one English sentence, preferably under 40 words.\n' +
+  '- Do not invent proper nouns, clause numbers, or system names that do not appear in the conversation.\n' +
+  '- Do not repeat policy text, deadlines, or process details stated by the assistant.\n' +
+  '- If the current question is complete and independent, lightly refine it for standalone_query.\n' +
+  '- For greetings, thanks, or knowledge-base-unrelated conversation, set need_retrieve=false and keep the original question in standalone_query.\n' +
+  '- Return the structured result without explanation.';
 
 export type RetrieveQueryPlan = {
   query: string;
@@ -36,7 +40,8 @@ export type RetrieveQueryPlan = {
 };
 
 /**
- * 检索前把追问改写成独立短查询。未配置 LLM 或改写失败时回退原文。
+ * Rewrite follow-up questions into standalone search queries before retrieval.
+ * Fall back to the original question when the LLM is unavailable or rewriting fails.
  */
 @Injectable()
 export class ChatQueryRewriteService {
@@ -89,16 +94,18 @@ export class ChatQueryRewriteService {
     try {
       const result = await this.rewriter.invoke([
         new SystemMessage(REWRITE_PROMPT),
-        new HumanMessage(`对话：\n${context}\n\n当前问题：${question}`),
+        new HumanMessage(
+          `Conversation:\n${context}\n\nCurrent question: ${question}`,
+        ),
       ]);
       const query = result.standalone_query.trim() || question;
       this.logger.log(
-        `检索改写：needRetrieve=${result.need_retrieve} query=${query.slice(0, 80)}`,
+        `Query rewrite: needRetrieve=${result.need_retrieve} query=${query.slice(0, 80)}`,
       );
       return { query, needRetrieve: result.need_retrieve };
     } catch (error) {
       this.logger.warn(
-        `检索改写失败，使用原问题：${error instanceof Error ? error.message : error}`,
+        `Query rewrite failed; using the original question: ${error instanceof Error ? error.message : error}`,
       );
       return fallback;
     }

@@ -1,18 +1,18 @@
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
-/** 用户分页列表查询 */
+/** Paginated user list query. */
 export class QueryUserDto {
   @IsOptional()
   @IsString()
   keyword?: string;
 
-  /** 按角色编码筛选，如 ROLE_REVIEWER */
+  /** Filter by role code, such as ROLE_REVIEWER. */
   @IsOptional()
   @IsString()
   roleCode?: string;
 
-  /** 0 禁用 1 启用 */
+  /** 0 = disabled, 1 = enabled. */
   @IsOptional()
   @Type(() => Number)
   @IsInt()

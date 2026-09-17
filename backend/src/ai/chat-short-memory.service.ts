@@ -11,9 +11,9 @@ import { RedisService } from '../redis/redis.service';
 import { isWorkingMessage } from './chat-memory.util';
 
 /**
- * 对话短期记忆：Redis 热窗口。
- * miss / 故障时由调用方从 Postgres 回填再 save。
- * 只存 human/ai 原文，不含检索资料、思考、Mem0 系统消息。
+ * Short-term conversation memory: a hot window in Redis.
+ * Callers reload from Postgres and save again on a miss or Redis failure.
+ * Stores only original human/AI messages, excluding retrieved sources, reasoning, and Mem0 system messages.
  */
 @Injectable()
 export class ChatShortMemoryService {
@@ -37,7 +37,7 @@ export class ChatShortMemoryService {
     return this.maxMessages;
   }
 
-  /** 命中返回消息；key 不存在或 Redis 故障返回 null */
+  /** Return messages on a hit; return null when the key is missing or Redis fails. */
   async tryLoad(
     userId: string,
     sessionId: string,
@@ -55,7 +55,7 @@ export class ChatShortMemoryService {
       );
     } catch (error) {
       this.logger.warn(
-        `短期记忆 Redis 读取失败，改走数据库：${error instanceof Error ? error.message : error}`,
+        `Short-term memory Redis read failed; falling back to the database: ${error instanceof Error ? error.message : error}`,
       );
       return null;
     }
@@ -76,7 +76,7 @@ export class ChatShortMemoryService {
       );
     } catch (error) {
       this.logger.warn(
-        `短期记忆 Redis 写入失败：${error instanceof Error ? error.message : error}`,
+        `Short-term memory Redis write failed: ${error instanceof Error ? error.message : error}`,
       );
     }
   }
@@ -100,7 +100,7 @@ export class ChatShortMemoryService {
       await this.redis.del(this.key(userId, sessionId));
     } catch (error) {
       this.logger.warn(
-        `短期记忆 Redis 删除失败：${error instanceof Error ? error.message : error}`,
+        `Short-term memory Redis delete failed: ${error instanceof Error ? error.message : error}`,
       );
     }
   }

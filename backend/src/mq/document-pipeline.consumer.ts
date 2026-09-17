@@ -14,11 +14,11 @@ import {
 import { RabbitMqService } from './rabbitmq.service';
 
 /**
- * 文档发布后管线的 MQ 消费者
+ * MQ consumer for the post-publication document pipeline.
  *
- * <p>消费：RAG 向量化 + Search 全文索引 + KG 建图。</p>
- * <p>注册时机：在构造函数里 `registerHandler`，</p>
- * 保证早于 {@link RabbitMqService.onModuleInit} 的 `bindConsumers`。
+ * <p>Consumes RAG vectorization, full-text search indexing, and KG construction tasks.</p>
+ * <p>Handlers are registered in the constructor with `registerHandler` before
+ * {@link RabbitMqService.onModuleInit} binds consumers.</p>
  */
 @Injectable()
 export class DocumentPipelineConsumer {
@@ -37,7 +37,7 @@ export class DocumentPipelineConsumer {
     this.rabbit.registerHandler(KG_GRAPH_QUEUE, (msg) => this.handleKg(msg));
   }
 
-  /** RAG：分块 → 向量化 → ES kh_chunk（dense_vector） */
+  /** RAG: chunking, vectorization, and ES kh_chunk (dense_vector). */
   private async handleRag(msg: ConsumeMessage) {
     const body = this.parseJson<ReindexMessage>(msg);
     this.logger.log(
@@ -46,7 +46,7 @@ export class DocumentPipelineConsumer {
     await this.orchestrator.handleRagReindex(body.type, body.documentIds);
   }
 
-  /** Search：文档级关键词索引（Elasticsearch kh_document） */
+  /** Search: document-level keyword index (Elasticsearch kh_document). */
   private async handleSearch(msg: ConsumeMessage) {
     const body = this.parseJson<SearchIndexMessage>(msg);
     this.logger.log(
@@ -55,7 +55,7 @@ export class DocumentPipelineConsumer {
     await this.orchestrator.handleSearchIndex(body.type, body.documentId);
   }
 
-  /** KG：分块 → 抽实体关系 → Neo4j */
+  /** KG: chunking, entity/relation extraction, and Neo4j persistence. */
   private async handleKg(msg: ConsumeMessage) {
     const body = this.parseJson<KgBuildMessage>(msg);
     this.logger.log(

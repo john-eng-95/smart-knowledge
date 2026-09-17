@@ -60,7 +60,7 @@ export default function ChatPage() {
       void loadSessions()
     },
     onError: (err) => {
-      message.error(err.message || '请求失败')
+      message.error(err.message || 'Request failed')
     },
   })
 
@@ -72,7 +72,7 @@ export default function ChatPage() {
       const res = await aiApi.sessions()
       setSessions(res.items)
     } catch {
-      /* 列表失败不挡问答 */
+      /* Session list failures should not block chat. */
     }
   }
 
@@ -101,7 +101,7 @@ export default function ChatPage() {
       .catch((err) => {
         if (!cancelled) {
           loadedSessionRef.current = undefined
-          message.error(err instanceof ApiError ? err.message : '加载会话失败')
+          message.error(err instanceof ApiError ? err.message : 'Failed to load session')
           navigate('/chat', { replace: true })
         }
       })
@@ -133,7 +133,7 @@ export default function ChatPage() {
 
   function switchSession(id?: string) {
     if (busy) {
-      message.warning('请等待当前回答结束再切换会话')
+      message.warning('Wait for the current response to finish before switching sessions')
       return
     }
     navigate(id ? `/chat?session=${id}` : '/chat')
@@ -141,7 +141,7 @@ export default function ChatPage() {
 
   async function onNew() {
     if (busy) {
-      message.warning('请等待当前回答结束再开新对话')
+      message.warning('Wait for the current response to finish before starting a new chat')
       return
     }
     try {
@@ -151,21 +151,21 @@ export default function ChatPage() {
       navigate(`/chat?session=${created.id}`)
       void loadSessions()
     } catch (err) {
-      message.error(err instanceof ApiError ? err.message : '创建失败')
+      message.error(err instanceof ApiError ? err.message : 'Creation failed')
     }
   }
 
   function onRemove(id: string, e: MouseEvent) {
     e.stopPropagation()
     if (busy) {
-      message.warning('请等待当前回答结束再删除')
+      message.warning('Wait for the current response to finish before deleting')
       return
     }
     modal.confirm({
-      title: '确定删除对话？',
-      content: '删除后，聊天记录将不可恢复。',
-      okText: '删除',
-      cancelText: '取消',
+      title: 'Delete this conversation?',
+      content: 'Deleted conversations cannot be recovered.',
+      okText: 'Delete',
+      cancelText: 'Cancel',
       okType: 'danger',
       centered: true,
       onOk: async () => {
@@ -178,7 +178,7 @@ export default function ChatPage() {
           }
           void loadSessions()
         } catch (err) {
-          message.error(err instanceof ApiError ? err.message : '删除失败')
+          message.error(err instanceof ApiError ? err.message : 'Delete failed')
           throw err
         }
       },
@@ -189,11 +189,11 @@ export default function ChatPage() {
     <div className="kh-page kh-chat-layout">
       <aside className="kh-chat-sessions">
         <Button type="primary" icon={<PlusOutlined />} block disabled={busy} onClick={() => void onNew()}>
-          新对话
+          New chat
         </Button>
         <div className="kh-chat-session-list">
           {sessions.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有会话" />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No conversations yet" />
           ) : (
             sessions.map((s) => (
               <div
@@ -213,14 +213,14 @@ export default function ChatPage() {
       </aside>
       <div className="kh-chat-main">
         <Typography.Title level={4} style={{ marginTop: 0 }}>
-          知识问答
+          Knowledge chat
         </Typography.Title>
         <Typography.Paragraph type="secondary">
-          只会检索你有权限的文档（公开、所在团队、自己写的）。流式回答会展示检索、思考与联网搜索过程，并写入左侧会话。
+          Searches only documents you are allowed to access (public, team-shared, or authored by you). Streaming responses show retrieval, reasoning, and web search activity and are saved to the session list.
         </Typography.Paragraph>
         <div className="kh-chat-log" ref={logRef} onScroll={onLogScroll}>
           {messages.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="输入问题开始一段对话" />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Ask a question to start a conversation" />
           ) : (
             messages.map((m, i) => {
               const liveAssistant =
@@ -242,7 +242,7 @@ export default function ChatPage() {
         <Space.Compact style={{ width: '100%' }}>
           <Input
             size="large"
-            placeholder="例如：上线前如何做金丝雀验证？"
+            placeholder="Example: How should we validate a canary release?"
             value={input}
             disabled={busy}
             onChange={(e) => setInput(e.target.value)}
@@ -250,11 +250,11 @@ export default function ChatPage() {
           />
           {streaming ? (
             <Button size="large" onClick={() => void stop()}>
-              停止
+              Stop
             </Button>
           ) : (
             <Button type="primary" size="large" onClick={() => void send()}>
-              发送
+              Send
             </Button>
           )}
         </Space.Compact>

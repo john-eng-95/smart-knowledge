@@ -4,8 +4,8 @@ import { HydratedDocument, Types } from 'mongoose';
 export type DocumentContentDocument = HydratedDocument<DocumentContent>;
 
 /**
- * 文档正文（MongoDB）
- * 与 Postgres kh_document 一对一：_id ↔ content_id，documentId ↔ id
+ * Document content (MongoDB).
+ * One-to-one with Postgres kh_document: _id <-> content_id and documentId <-> id.
  */
 @Schema({
   collection: 'document_content',
@@ -13,30 +13,30 @@ export type DocumentContentDocument = HydratedDocument<DocumentContent>;
   versionKey: false,
 })
 export class DocumentContent {
-  /** ObjectId，对应 kh_document.content_id */
+  /** ObjectId corresponding to kh_document.content_id. */
   _id: Types.ObjectId;
 
-  /** 关联的文档元数据 ID（kh_document.id） */
+  /** Related document metadata ID (kh_document.id). */
   @Prop({ type: String, required: true, index: true })
   documentId: string;
 
-  /** Markdown 正文 */
+  /** Markdown content. */
   @Prop({ type: String, required: true, default: '' })
   content: string;
 
-  /** 正文字符数 */
+  /** Content character count. */
   @Prop({ type: Number, default: 0 })
   contentLength: number;
 
-  /** 正文摘要 / 预览 */
+  /** Content summary / preview. */
   @Prop({ type: String, default: '' })
   contentSummary: string;
 
-  /** 版本号 */
+  /** Version number. */
   @Prop({ type: Number, default: 1 })
   version: number;
 
-  /** 逻辑删除 */
+  /** Soft-delete flag. */
   @Prop({ type: Boolean, default: false })
   deleted: boolean;
 }

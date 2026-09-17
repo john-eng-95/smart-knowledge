@@ -1,4 +1,4 @@
-/** RAG 重建 / 删除索引消息 */
+/** RAG reindex/delete message. */
 export type ReindexType = 'BY_DOC_IDS' | 'DELETE_BY_DOC_IDS';
 
 export interface ReindexMessage {
@@ -7,7 +7,7 @@ export interface ReindexMessage {
   documentIds?: string[];
 }
 
-/** ES 搜索索引消息（只带 documentId，消费者从 Mongo 拉全文） */
+/** ES search index message; the consumer loads the full text from MongoDB. */
 export type SearchIndexType = 'INDEX' | 'DELETE';
 
 export interface SearchIndexMessage {
@@ -16,7 +16,7 @@ export interface SearchIndexMessage {
   documentId: string;
 }
 
-/** KG 建图 / 删图消息 */
+/** Knowledge graph build/delete message. */
 export type KgBuildType =
   'BUILD_ALL' | 'BUILD_BY_DOC_IDS' | 'DELETE_BY_DOC_IDS';
 

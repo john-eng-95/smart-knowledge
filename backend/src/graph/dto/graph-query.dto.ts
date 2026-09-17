@@ -34,7 +34,7 @@ export class GraphSearchDto {
   limit?: number;
 }
 
-/** 全景图查询 */
+/** Graph overview query. */
 export class GraphOverviewDto {
   @IsOptional()
   @IsString()
@@ -44,7 +44,7 @@ export class GraphOverviewDto {
   @IsString()
   entityType?: string;
 
-  /** 文档 updatedAt 下界，ISO 字符串 */
+  /** Lower bound for document updatedAt, as an ISO string. */
   @IsOptional()
   @IsString()
   from?: string;

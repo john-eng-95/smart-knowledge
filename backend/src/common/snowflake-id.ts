@@ -5,7 +5,7 @@ const snowflake = new SnowflakeId({
   offset: Number(process.env.SNOWFLAKE_OFFSET ?? 1704067200000),
 });
 
-/** 生成雪花 ID（string），对应 Postgres BIGINT */
+/** Generate a Snowflake ID string corresponding to PostgreSQL BIGINT. */
 export function nextSnowflakeId(): string {
   return snowflake.generate();
 }

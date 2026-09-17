@@ -28,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: JwtPayload) {
     if (payload.type !== 'access') {
-      throw new UnauthorizedException('无效的 access token');
+      throw new UnauthorizedException('Invalid access token');
     }
     return this.authService.buildAuthUser(payload.sub);
   }

@@ -1,23 +1,23 @@
 /**
- * RabbitMQ 拓扑常量
+ * RabbitMQ topology constants.
  *
- * 交换机：rag.reindex / search.index / kg.graph
- * 队列名带 `kh.` 前缀，避免和本机同时跑的其他项目冲突。
+ * Exchanges: rag.reindex / search.index / kg.graph.
+ * Queue names use the `kh.` prefix to avoid collisions with other local projects.
  */
 
-/** RAG 重建索引交换机（topic） */
+/** RAG reindex exchange (topic). */
 export const RAG_REINDEX_EXCHANGE = 'rag.reindex.exchange';
-/** 文档级搜索索引交换机（topic） */
+/** Document-level search index exchange (topic). */
 export const SEARCH_INDEX_EXCHANGE = 'search.index.exchange';
-/** KG 知识图谱构建交换机（topic） */
+/** Knowledge graph build exchange (topic). */
 export const KG_GRAPH_EXCHANGE = 'kg.graph.exchange';
 
-/** 本服务消费的队列 */
+/** Queues consumed by this service. */
 export const RAG_REINDEX_QUEUE = 'kh.rag.reindex.queue';
 export const SEARCH_INDEX_QUEUE = 'kh.search.index.queue';
 export const KG_GRAPH_QUEUE = 'kh.kg.graph.queue';
 
-/** 路由键：按文档 ID 重建 / 删除 */
+/** Routing keys for document-level rebuild and deletion. */
 export const RAG_RK_BY_IDS = 'rag.reindex.by_ids';
 export const RAG_RK_DELETE = 'rag.reindex.delete';
 export const SEARCH_RK_INDEX = 'search.index.document';

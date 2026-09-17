@@ -31,12 +31,12 @@ import type { ChunkHit } from '../pipeline/types/pipeline.types';
 const EXCERPT_LEN = 200;
 
 const SYSTEM =
-  '你是企业知识库助手。优先根据「检索到的资料」回答。' +
-  '结合对话历史和记忆里的用户背景，但制度/流程以本轮资料为准，不要用记忆替代文档。' +
-  '没有检索资料且是寒暄时，直接回应，不必调用 web_search。' +
-  '资料不足、需要时效性或外部公开信息时，调用 web_search。' +
-  '依据资料的陈述句末标 [n]，与资料编号一致。' +
-  '联网结果用标题+链接说明，不要编造。资料不够就明确说不知道。';
+  'You are an enterprise knowledge base assistant. Prefer the retrieved sources when answering. ' +
+  'Use conversation history and user background from memory, but treat sources from this turn as authoritative for policies and procedures; never replace documents with memory. ' +
+  'For greetings without retrieved sources, respond directly without calling web_search. ' +
+  'When sources are insufficient, current information is required, or external public information is needed, call web_search. ' +
+  'End source-based statements with the matching source number, such as [1]. ' +
+  'Describe web results with their title and link; do not fabricate information. Say you do not know when the available information is insufficient.';
 
 type KhUIMessage = UIMessage<
   unknown,
@@ -100,7 +100,7 @@ export class AiStreamService {
       configuration: { baseURL },
       modelKwargs: enableThinking ? { enable_thinking: true } : undefined,
     });
-    // 摘要/分类不要开思考，结构化输出更容易稳
+    // Disable reasoning for summaries and classification so structured output is more reliable.
     const compactLlm = new ChatOpenAI({
       apiKey,
       model: modelName,
@@ -121,16 +121,16 @@ export class AiStreamService {
           {
             name: 'web_search',
             description:
-              '联网搜索（Bocha）。知识库不足、需要最新公开信息或外部资料时再调用。不要用它替代知识库已有内容。',
+              'Bocha web search. Use it only when the knowledge base is insufficient or current/external public information is needed. Do not use it to replace existing knowledge base content.',
             schema: z.object({
-              query: z.string().min(1).describe('搜索关键词'),
+              query: z.string().min(1).describe('Search query'),
               count: z
                 .number()
                 .int()
                 .min(1)
                 .max(10)
                 .optional()
-                .describe('条数，默认 5'),
+                .describe('Result count, defaults to 5'),
             }),
           },
         ),
@@ -142,9 +142,9 @@ export class AiStreamService {
           trigger: { messages: 12 },
           keep: { messages: 6 },
           summaryPrompt:
-            '用中文简洁总结对话：话题、已确认结论、待办。不要写入知识库条文。\n\n待摘要的对话：\n{messages}\n\n摘要：',
+            'Summarize the conversation concisely in English: topic, confirmed conclusions, and action items. Do not turn knowledge base policy text into memory.\n\nConversation to summarize:\n{messages}\n\nSummary:',
         }),
-        // 单次 invoke 最多调 4 次模型，避免 web_search 循环打爆；超限正常结束而非抛错
+        // Limit each invocation to four model calls to prevent web_search loops; end normally when the limit is reached.
         modelCallLimitMiddleware({ runLimit: 4, exitBehavior: 'end' }),
       ],
     });
@@ -157,7 +157,7 @@ export class AiStreamService {
     let persistSources: ChatSource[] = [];
     let persistHistory: BaseMessage[] = [];
 
-    // SDK 只提供 UI Message 协议；会话、RAG、data-* 和 Agent 流要在 execute 里自己编排
+    // The SDK provides only the UI Message protocol; orchestrate sessions, RAG, data-* events, and the agent stream here.
     const stream = createUIMessageStream<KhUIMessage>({
       execute: async ({ writer }) => {
         writer.write({ type: 'start' });
@@ -167,7 +167,7 @@ export class AiStreamService {
           writer.write({
             type: 'text-delta',
             id: 'empty',
-            delta: '请输入问题。',
+            delta: 'Please enter a question.',
           });
           writer.write({ type: 'text-end', id: 'empty' });
           writer.write({ type: 'finish' });
@@ -191,7 +191,7 @@ export class AiStreamService {
         if (history.length) {
           writer.write({
             type: 'data-status',
-            data: { stage: 'rewrite', text: '正在理解问题…' },
+            data: { stage: 'rewrite', text: 'Understanding the question…' },
           });
         }
         const plan = await this.queryRewrite.rewrite(question, history);
@@ -199,7 +199,7 @@ export class AiStreamService {
         if (plan.needRetrieve) {
           writer.write({
             type: 'data-status',
-            data: { stage: 'retrieve', text: '正在检索知识库…' },
+            data: { stage: 'retrieve', text: 'Searching the knowledge base…' },
           });
         }
 
@@ -208,7 +208,7 @@ export class AiStreamService {
             ? this.retrieval.retrieve(plan.query, topK, user).catch((error) => {
                 const detail =
                   error instanceof Error ? error.message : String(error);
-                this.logger.warn(`RAG 检索失败：${detail}`);
+                this.logger.warn(`RAG retrieval failed: ${detail}`);
                 return [] as ChunkHit[];
               })
             : Promise.resolve([] as ChunkHit[]),
@@ -242,17 +242,18 @@ export class AiStreamService {
         if (!this.agent) {
           writer.write({
             type: 'error',
-            errorText: '未配置 LLM Key，无法生成回答',
+            errorText:
+              'No LLM key is configured; unable to generate a response',
           });
           writer.write({ type: 'finish' });
           return;
         }
 
         const prompt = hits.length
-          ? `检索到的资料：\n${this.buildContext(hits)}\n\n用户问题：${question}`
+          ? `Retrieved sources:\n${this.buildContext(hits)}\n\nUser question: ${question}`
           : plan.needRetrieve
-            ? `知识库没有召回到相关内容。\n\n用户问题：${question}`
-            : `用户问题：${question}`;
+            ? `No relevant content was retrieved from the knowledge base.\n\nUser question: ${question}`
+            : `User question: ${question}`;
 
         const memoryMsg = this.longMemory.buildSystemMessage(memHits);
         const langchainStream = await this.agent.stream(
@@ -263,17 +264,17 @@ export class AiStreamService {
               new HumanMessage(prompt),
             ],
           },
-          // messages：模型 token/思考；tools：web_search 调用，给适配包转成 tool-* 事件
+          // messages: model tokens/reasoning; tools: web_search calls converted to tool-* events by the adapter.
           { streamMode: ['messages', 'tools'] },
         );
 
         writer.merge(
           toUIMessageStream(mapReasoningStream(langchainStream) as never, {
-            // 外层 execute 已写 start，流结束由 createUIMessageStream 收口，避免重复
+            // The outer execute already wrote start; createUIMessageStream closes the stream to avoid duplicates.
             sendStart: false,
             sendFinish: false,
             onError: (error) => {
-              this.logger.warn(`LangChain 流失败：${error.message}`);
+              this.logger.warn(`LangChain stream failed: ${error.message}`);
             },
           }) as never,
         );
@@ -292,7 +293,7 @@ export class AiStreamService {
           ? persistSources.filter((s) => used.has(s.index))
           : [];
         if (!question || !persistSessionId) return;
-        const finalAnswer = answer || '未能生成回答。';
+        const finalAnswer = answer || 'Unable to generate a response.';
         try {
           await this.sessions.appendTurn(
             user.userId,
@@ -310,7 +311,7 @@ export class AiStreamService {
           );
         } catch (error) {
           this.logger.warn(
-            `流式对话落库失败：${error instanceof Error ? error.message : error}`,
+            `Failed to persist streaming chat: ${error instanceof Error ? error.message : error}`,
           );
         }
         void this.longMemory.rememberTurn(
@@ -339,7 +340,7 @@ export class AiStreamService {
     if (history.length) {
       await this.shortMemory.save(userId, sessionId, history);
       this.logger.log(
-        `短期记忆从库回填：sessionId=${sessionId}, n=${history.length}`,
+        `Short-term memory reloaded from the database: sessionId=${sessionId}, n=${history.length}`,
       );
     }
     return history;
@@ -371,8 +372,8 @@ export class AiStreamService {
 }
 
 /**
- * 百炼兼容口把思考放在 reasoning_content；适配包只认
- * additional_kwargs.reasoning.summary，这里转一下。
+ * The DashScope-compatible endpoint puts reasoning in reasoning_content, while
+ * the adapter expects additional_kwargs.reasoning.summary. Convert it here.
  */
 async function* mapReasoningStream(
   stream: AsyncIterable<unknown>,
@@ -383,7 +384,7 @@ async function* mapReasoningStream(
   }
 }
 
-/** 递归找 additional_kwargs.reasoning_content 并改写成适配包要的 reasoning.summary；seen 防循环引用 */
+/** Recursively map additional_kwargs.reasoning_content to reasoning.summary; seen prevents circular references. */
 function attachDashScopeReasoning(
   value: unknown,
   seen = new Set<object>(),

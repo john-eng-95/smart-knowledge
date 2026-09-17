@@ -17,11 +17,11 @@ import { extname } from 'path';
 export interface UploadBytesOptions {
   fileName: string;
   contentType: string;
-  /** 对象 key 前缀，默认 documents */
+  /** Object key prefix; defaults to documents. */
   prefix?: string;
 }
 
-/** RustFS 文件存储（S3 兼容） */
+/** RustFS file storage (S3-compatible). */
 @Injectable()
 export class RustfsService implements OnModuleInit {
   private readonly logger = new Logger(RustfsService.name);
@@ -38,7 +38,9 @@ export class RustfsService implements OnModuleInit {
       'false';
 
     if (!this.enabled) {
-      this.logger.warn('RustFS 已禁用（RUSTFS_ENABLED=false），文件上传将跳过');
+      this.logger.warn(
+        'RustFS is disabled (RUSTFS_ENABLED=false); file uploads will be skipped',
+      );
       return;
     }
 
@@ -68,12 +70,12 @@ export class RustfsService implements OnModuleInit {
     });
 
     this.logger.log(
-      `RustFS 已配置: endpoint=${endpoint}, bucket=${this.bucket}, public=${this.publicBaseUrl}`,
+      `RustFS configured: endpoint=${endpoint}, bucket=${this.bucket}, public=${this.publicBaseUrl}`,
     );
 
     void this.ensureBucket().catch((err) => {
       this.logger.warn(
-        `RustFS 初始化 bucket 失败（首次上传时会重试）: ${err instanceof Error ? err.message : err}`,
+        `RustFS bucket initialization failed (will retry on first upload): ${err instanceof Error ? err.message : err}`,
       );
     });
   }
@@ -82,14 +84,14 @@ export class RustfsService implements OnModuleInit {
     return this.enabled && this.client != null;
   }
 
-  /** 上传字节，返回可访问 URL：{publicBase}/{bucket}/{key} */
+  /** Upload bytes and return an accessible URL: {publicBase}/{bucket}/{key}. */
   async uploadBytes(
     bytes: Buffer | Uint8Array,
     options: UploadBytesOptions,
   ): Promise<string> {
     if (!this.isEnabled() || !this.client) {
       throw new ServiceUnavailableException(
-        'RustFS 未启用或未配置，无法上传文件',
+        'RustFS is disabled or not configured; unable to upload the file',
       );
     }
 
@@ -113,7 +115,7 @@ export class RustfsService implements OnModuleInit {
 
     const url = `${this.publicBaseUrl}/${this.bucket}/${key}`;
     this.logger.log(
-      `RustFS 上传成功: key=${key}, size=${body.length}, url=${url}`,
+      `RustFS upload succeeded: key=${key}, size=${body.length}, url=${url}`,
     );
     return url;
   }
@@ -125,14 +127,14 @@ export class RustfsService implements OnModuleInit {
       await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
       return;
     } catch {
-      // bucket 不存在则创建
+      // Create the bucket when it does not exist.
     }
 
     try {
       await this.client.send(new CreateBucketCommand({ Bucket: this.bucket }));
-      this.logger.log(`RustFS bucket 已创建: ${this.bucket}`);
+      this.logger.log(`RustFS bucket created: ${this.bucket}`);
     } catch (err) {
-      // 并发创建时可能已存在
+      // A concurrent creator may have created it already.
       const message = err instanceof Error ? err.message : String(err);
       if (
         !/BucketAlreadyOwnedByYou|BucketAlreadyExists|already exists/i.test(

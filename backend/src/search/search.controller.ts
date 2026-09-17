@@ -11,7 +11,7 @@ import { accessFromUser } from '../document/document-access';
 export class SearchController {
   constructor(private readonly searchIndex: SearchIndexService) {}
 
-  /** 关键词检索已发布文档（ES kh_document） */
+  /** Search published documents by keyword (ES kh_document). */
   @Post()
   @RequirePermission(PermissionCode.search)
   search(@Body() dto: SearchDocumentsDto, @CurrentUser() user: AuthUser) {

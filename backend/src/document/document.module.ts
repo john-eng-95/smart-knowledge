@@ -11,9 +11,9 @@ import { FileParserService } from './parser/file-parser.service';
 import { PipelineModule } from '../pipeline/pipeline.module';
 
 /**
- * 文档模块
- * - DocumentService：文档 CRUD + 状态流转（草稿 / 发布 / 归档 / 待审核）
- * - DocumentReviewService：发布审核（提交 / 通过 / 驳回）
+ * Document module.
+ * - DocumentService: document CRUD and status transitions (draft / publish / archive / review).
+ * - DocumentReviewService: publication review (submit / approve / reject).
  */
 @Module({
   imports: [

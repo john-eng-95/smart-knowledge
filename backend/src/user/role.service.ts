@@ -29,7 +29,7 @@ export class RoleService {
 
   async getById(id: string) {
     const role = await this.roleRepo.findOne({ where: { id } });
-    if (!role) throw new NotFoundException('角色不存在');
+    if (!role) throw new NotFoundException('Role not found');
     return role;
   }
 
@@ -37,7 +37,7 @@ export class RoleService {
     const exists = await this.roleRepo.findOne({
       where: { roleCode: dto.roleCode },
     });
-    if (exists) throw new ConflictException('角色编码已存在');
+    if (exists) throw new ConflictException('Role code already exists');
     const role = this.roleRepo.create({
       id: nextSnowflakeId(),
       roleName: dto.roleName,
@@ -60,7 +60,9 @@ export class RoleService {
     const role = await this.getById(id);
     const bound = await this.userRoleRepo.count({ where: { roleId: id } });
     if (bound > 0) {
-      throw new BadRequestException('角色仍有关联用户，无法删除');
+      throw new BadRequestException(
+        'Cannot delete a role that is still assigned to users',
+      );
     }
     await this.roleRepo.remove(role);
   }

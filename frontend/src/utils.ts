@@ -1,10 +1,10 @@
 import type { AuthUser, TeamItem, TeamTreeNode } from './types'
 
 export const DOC_STATUS: Record<number, { label: string; color: string }> = {
-  0: { label: '草稿', color: 'default' },
-  1: { label: '已发布', color: 'success' },
-  2: { label: '已归档', color: 'warning' },
-  3: { label: '待审核', color: 'processing' },
+  0: { label: 'Draft', color: 'default' },
+  1: { label: 'Published', color: 'success' },
+  2: { label: 'Archived', color: 'warning' },
+  3: { label: 'Pending review', color: 'processing' },
 }
 
 export function formatTime(value?: string | null) {
@@ -31,7 +31,7 @@ export function isReviewer(user: AuthUser | null) {
   )
 }
 
-/** 作者或管理员可改文档 */
+/** Authors and administrators can edit documents. */
 export function canWriteDocument(
   user: AuthUser | null,
   doc: { authorId?: string | null },
@@ -45,9 +45,9 @@ export function visibilityMeta(doc: {
   isPublic?: boolean | null
   teamId?: string | null
 }) {
-  if (doc.isPublic) return { label: '公开', color: 'success' as const }
-  if (doc.teamId) return { label: '团队可见', color: 'blue' as const }
-  return { label: '仅自己', color: 'default' as const }
+  if (doc.isPublic) return { label: 'Public', color: 'success' as const }
+  if (doc.teamId) return { label: 'Team', color: 'blue' as const }
+  return { label: 'Private', color: 'default' as const }
 }
 
 export function flattenTeams(nodes: TeamTreeNode[] | unknown[]): TeamItem[] {
@@ -65,11 +65,11 @@ export function flattenTeams(nodes: TeamTreeNode[] | unknown[]): TeamItem[] {
 }
 
 export function displayName(user: AuthUser | null) {
-  if (!user) return '未登录'
+  if (!user) return 'Not signed in'
   return user.realName?.trim() || user.username
 }
 
-/** ES 高亮只保留 em，避免 XSS */
+/** Preserve only em tags in Elasticsearch highlights to prevent XSS. */
 export function safeHighlight(html?: string) {
   if (!html) return ''
   return html

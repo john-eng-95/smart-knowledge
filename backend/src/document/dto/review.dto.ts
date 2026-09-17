@@ -1,9 +1,9 @@
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
-/** 审核任务列表查询（审核员工作台） */
+/** Review task list query (review workspace). */
 export class QueryReviewTasksDto {
-  /** 筛选：pending 待办 | approved 已通过 | rejected 已驳回；默认 pending */
+  /** Filter: pending, approved, or rejected; defaults to pending. */
   @IsOptional()
   @IsString()
   status?: 'pending' | 'approved' | 'rejected';
@@ -22,9 +22,9 @@ export class QueryReviewTasksDto {
   pageSize?: number = 20;
 }
 
-/** 审核通过 / 驳回请求体（审核人信息从 JWT 取，不在 body 传） */
+/** Approve/reject request body (reviewer identity comes from JWT, not the body). */
 export class ReviewDecisionDto {
-  /** 审核意见（驳回时必填） */
+  /** Review comment (required when rejecting). */
   @IsOptional()
   @IsString()
   reviewComment?: string;

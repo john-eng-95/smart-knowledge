@@ -1,4 +1,4 @@
-/** 用户对外展示（不含 password） */
+/** Public user representation without the password. */
 export class UserVO {
   id: string;
   username: string;

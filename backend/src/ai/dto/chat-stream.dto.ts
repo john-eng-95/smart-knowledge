@@ -9,7 +9,7 @@ import {
   Min,
 } from 'class-validator';
 
-/** useChat Data Stream 请求体（额外字段放行） */
+/** useChat Data Stream request body (additional fields are allowed). */
 export class ChatStreamDto {
   @IsArray()
   messages: Array<{

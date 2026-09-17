@@ -69,6 +69,6 @@ export class PermissionController {
   @RequirePermission('system:permission:delete')
   async delete(@Param('id') id: string) {
     await this.permissionService.delete(id);
-    return { message: '删除成功' };
+    return { message: 'Deleted successfully' };
   }
 }

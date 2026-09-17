@@ -49,7 +49,7 @@ export class PermissionService {
     const perm = await this.permRepo.findOne({
       where: { id, deleted: false },
     });
-    if (!perm) throw new NotFoundException('权限不存在');
+    if (!perm) throw new NotFoundException('Permission not found');
     return perm;
   }
 
@@ -64,7 +64,7 @@ export class PermissionService {
     const exists = await this.permRepo.findOne({
       where: { permissionCode: dto.permissionCode, deleted: false },
     });
-    if (exists) throw new ConflictException('权限编码已存在');
+    if (exists) throw new ConflictException('Permission code already exists');
     const perm = this.permRepo.create({
       id: nextSnowflakeId(),
       parentId: dto.parentId ?? '0',
@@ -87,7 +87,7 @@ export class PermissionService {
       const exists = await this.permRepo.findOne({
         where: { permissionCode: dto.permissionCode, deleted: false },
       });
-      if (exists) throw new ConflictException('权限编码已存在');
+      if (exists) throw new ConflictException('Permission code already exists');
       perm.permissionCode = dto.permissionCode;
     }
     if (dto.permissionName !== undefined)
@@ -96,7 +96,7 @@ export class PermissionService {
       perm.permissionType = dto.permissionType;
     if (dto.parentId !== undefined) {
       if (dto.parentId === id) {
-        throw new BadRequestException('父权限不能是自己');
+        throw new BadRequestException('A permission cannot be its own parent');
       }
       perm.parentId = dto.parentId;
     }
@@ -115,7 +115,9 @@ export class PermissionService {
       where: { parentId: id, deleted: false },
     });
     if (childCount > 0) {
-      throw new BadRequestException('存在子权限，无法删除');
+      throw new BadRequestException(
+        'Cannot delete a permission that has child permissions',
+      );
     }
     const roleBound = await this.rolePermRepo.count({
       where: { permissionId: id },
@@ -124,7 +126,9 @@ export class PermissionService {
       where: { permissionId: id },
     });
     if (roleBound > 0 || userBound > 0) {
-      throw new BadRequestException('权限仍有关联角色或用户，无法删除');
+      throw new BadRequestException(
+        'Cannot delete a permission that is still assigned to roles or users',
+      );
     }
     perm.deleted = true;
     await this.permRepo.save(perm);
@@ -205,7 +209,7 @@ export class PermissionService {
     return dto.permissionIds;
   }
 
-  /** 合并直接权限 + 角色权限；管理员追加 ADMIN_OPERATION_PERMISSIONS */
+  /** Merge direct and role permissions; administrators also receive ADMIN_OPERATION_PERMISSIONS. */
   async getUserPermissionCodes(userId: string): Promise<string[]> {
     const direct = await this.userPermRepo
       .createQueryBuilder('up')
@@ -253,7 +257,7 @@ export class PermissionService {
 
   private async ensureRoleExists(roleId: string) {
     const role = await this.roleRepo.findOne({ where: { id: roleId } });
-    if (!role) throw new NotFoundException('角色不存在');
+    if (!role) throw new NotFoundException('Role not found');
   }
 
   private async validatePermissionIds(ids: string[]) {
@@ -262,7 +266,9 @@ export class PermissionService {
       where: { id: In(ids), deleted: false, status: 1 },
     });
     if (found.length !== ids.length) {
-      throw new NotFoundException('部分权限不存在或已禁用');
+      throw new NotFoundException(
+        'Some permissions do not exist or are disabled',
+      );
     }
   }
 }

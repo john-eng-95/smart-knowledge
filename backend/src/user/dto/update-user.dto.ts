@@ -1,6 +1,6 @@
 import { IsEmail, IsInt, IsOptional, IsString } from 'class-validator';
 
-/** 管理员更新用户资料 */
+/** Administrator update payload for user data. */
 export class UpdateUserDto {
   @IsOptional()
   @IsEmail()

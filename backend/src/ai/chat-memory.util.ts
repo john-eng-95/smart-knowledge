@@ -36,7 +36,7 @@ export function dbRowsToMessages(rows: AiMessageEntity[]): BaseMessage[] {
   return out;
 }
 
-/** 给检索改写器用：最近几轮，助手只留短摘要，避免制度原文污染 query */
+/** Context for query rewriting: keep short assistant summaries so policy text does not pollute the query. */
 export function compactRewriteContext(history: BaseMessage[]): string {
   if (!history.length) return '';
   const lines: string[] = [];
@@ -44,9 +44,9 @@ export function compactRewriteContext(history: BaseMessage[]): string {
     const text = messageText(message);
     if (!text) continue;
     if (HumanMessage.isInstance(message)) {
-      lines.push(`用户：${text.slice(0, 200)}`);
+      lines.push(`User: ${text.slice(0, 200)}`);
     } else if (AIMessage.isInstance(message)) {
-      lines.push(`助手：${text.slice(0, 120)}`);
+      lines.push(`Assistant: ${text.slice(0, 120)}`);
     }
   }
   return lines.join('\n');

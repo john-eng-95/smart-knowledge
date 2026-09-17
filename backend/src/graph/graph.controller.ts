@@ -16,7 +16,7 @@ import { accessFromUser } from '../document/document-access';
 export class GraphController {
   constructor(private readonly graph: GraphBuildService) {}
 
-  /** 全景：文档 / 实体 / 标签 + 统计，供前端力导向图 */
+  /** Overview of documents, entities, tags, and statistics for the force graph. */
   @Get('overview')
   overview(@Query() query: GraphOverviewDto, @CurrentUser() user: AuthUser) {
     return this.graph.getOverview({
@@ -29,7 +29,7 @@ export class GraphController {
     });
   }
 
-  /** 按关键词搜实体 / 文档 / 块节点 */
+  /** Search entity, document, and chunk nodes by keyword. */
   @Get('search')
   search(@Query() query: GraphSearchDto, @CurrentUser() user: AuthUser) {
     return this.graph.searchGraph(
@@ -39,7 +39,7 @@ export class GraphController {
     );
   }
 
-  /** 知识实体节点 */
+  /** Knowledge entity nodes. */
   @Get('nodes')
   listNodes(@Query() query: GraphQueryDto, @CurrentUser() user: AuthUser) {
     return this.graph.listNodes(
@@ -49,7 +49,7 @@ export class GraphController {
     );
   }
 
-  /** 实体间 RELATED_TO 边 */
+  /** RELATED_TO edges between entities. */
   @Get('edges')
   listEdges(@Query() query: GraphQueryDto, @CurrentUser() user: AuthUser) {
     return this.graph.listEdges(query.limit ?? 500, accessFromUser(user));

@@ -13,17 +13,17 @@ import {
   type DocumentAccessScope,
 } from '../document/document-access';
 
-/** ES 文档级全文检索索引名 */
+/** ES document-level full-text search index name. */
 const ES_INDEX = 'kh_document';
 
 /**
- * 文档级全文搜索索引
+ * Document-level full-text search index.
  *
- * <p>与 RAG 向量索引的区别：</p>
- * - 这里是「整篇文档」一条记录（标题/摘要/全文），给关键词搜索用
- * - RAG 是「多块 + 向量」，给后续对话检索预留
+ * <p>Difference from the RAG vector index:</p>
+ * - This stores one record per whole document (title/summary/content) for keyword search.
+ * - RAG stores multiple chunks and vectors for conversational retrieval.
  *
- * <p>仅写入 Elasticsearch `kh_document`；ES 不可用时跳过写入并打日志。</p>
+ * <p>Writes only to Elasticsearch `kh_document`; skips writes and logs when ES is unavailable.</p>
  */
 @Injectable()
 export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
@@ -38,7 +38,9 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     if (!this.esEnabled) {
-      this.logger.warn('Elasticsearch 已禁用，搜索索引将跳过写入');
+      this.logger.warn(
+        'Elasticsearch is disabled; skipping search index writes',
+      );
       return;
     }
 
@@ -50,13 +52,15 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
     try {
       const health = await this.es.cluster.health();
       this.logger.log(
-        `SearchIndex ES 已连接：${node}, status=${health.status}`,
+        `SearchIndex ES connected: ${node}, status=${health.status}`,
       );
       await this.ensureEsIndex();
       await this.ensureVisibilityMapping();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Elasticsearch 不可用，搜索索引将跳过写入：${message}`);
+      this.logger.warn(
+        `Elasticsearch unavailable; skipping search index writes: ${message}`,
+      );
       this.es = null;
     }
   }
@@ -66,12 +70,12 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Upsert 一篇文档的搜索记录（含 Mongo 全文）。
+   * Upsert a document search record, including full Mongo content.
    */
   async indexDocument(doc: Record<string, unknown>) {
     if (!this.es) {
       this.logger.warn(
-        `跳过搜索索引写入（ES 不可用）：documentId=${String(doc.id)}`,
+        `Skipping search index write (ES unavailable): documentId=${String(doc.id)}`,
       );
       return;
     }
@@ -87,17 +91,17 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
       refresh: true,
     });
 
-    this.logger.log(`搜索索引已写入 ES：documentId=${id}`);
+    this.logger.log(`Search index written to ES: documentId=${id}`);
   }
 
-  /** 已发布文档只改公开/团队时，补写可见性字段，不必整篇重索引 */
+  /** Update visibility fields for published documents without reindexing the whole document. */
   async updateVisibility(
     documentId: string,
     vis: { isPublic: boolean; teamId: string | null; authorId: string | null },
   ) {
     if (!this.es) {
       this.logger.warn(
-        `跳过搜索可见性更新（ES 不可用）：documentId=${documentId}`,
+        `Skipping search visibility update (ES unavailable): documentId=${documentId}`,
       );
       return;
     }
@@ -112,20 +116,22 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
         },
         refresh: true,
       });
-      this.logger.log(`搜索索引可见性已更新：documentId=${documentId}`);
+      this.logger.log(
+        `Search index visibility updated: documentId=${documentId}`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `搜索索引可见性更新失败：documentId=${documentId}, ${message}`,
+        `Search index visibility update failed: documentId=${documentId}, ${message}`,
       );
     }
   }
 
-  /** 下架 / 删除时从 ES 移除 */
+  /** Remove from ES when unpublished or deleted. */
   async deleteDocument(documentId: string) {
     if (!this.es) {
       this.logger.warn(
-        `跳过搜索索引删除（ES 不可用）：documentId=${documentId}`,
+        `Skipping search index deletion (ES unavailable): documentId=${documentId}`,
       );
       return;
     }
@@ -139,16 +145,18 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!message.includes('404')) {
-        this.logger.warn(`ES 删除失败：documentId=${documentId}, ${message}`);
+        this.logger.warn(
+          `ES deletion failed: documentId=${documentId}, ${message}`,
+        );
       }
     }
 
-    this.logger.log(`搜索索引已删除：documentId=${documentId}`);
+    this.logger.log(`Search index deleted: documentId=${documentId}`);
   }
 
   /**
-   * 关键词检索 kh_document。
-   * ES 不可用时返回空分页，不抛错。
+   * Keyword search across kh_document.
+   * Return an empty page without throwing when ES is unavailable.
    */
   async searchDocuments(params: {
     keyword: string;
@@ -163,7 +171,7 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
     const from = (page - 1) * pageSize;
 
     if (!this.es) {
-      this.logger.warn('跳过搜索查询（ES 不可用）');
+      this.logger.warn('Skipping search query (ES unavailable)');
       return { items: [], total: 0, page, pageSize };
     }
 
@@ -180,7 +188,7 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
     }
 
     const keyword = params.keyword.trim();
-    // title^3 / summary^2：标题、摘要命中比正文权重大；filter 只筛不参与打分
+    // title^3 / summary^2: title and summary matches outweigh content; filters do not affect scores.
     const query =
       filters.length > 0
         ? {
@@ -211,11 +219,11 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
         from,
         size: pageSize,
         query,
-        // 列表不回传全文，仍用 content 做匹配与高亮
+        // Do not return full content in the list; still use content for matching and highlighting.
         _source: {
           excludes: ['content'],
         },
-        // 命中片段打 <em>，给前端做摘要；正文最多 3 段、标题整段不高亮切片
+        // Wrap matching fragments in <em> for frontend snippets; use up to three content fragments and the full title.
         highlight: {
           fields: {
             title: { number_of_fragments: 0 },
@@ -255,19 +263,19 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
       return { items, total, page, pageSize };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`搜索查询失败：${message}`);
+      this.logger.warn(`Search query failed: ${message}`);
       return { items: [], total: 0, page, pageSize };
     }
   }
 
-  /** 中文：写入细切（ik_max_word），检索粗切（ik_smart） */
+  /** For Chinese text, index with fine tokenization (ik_max_word) and search with coarse tokenization (ik_smart). */
   private readonly ikText = {
     type: 'text' as const,
     analyzer: 'ik_max_word',
     search_analyzer: 'ik_smart',
   };
 
-  /** 索引不存在则创建（title / summary / content 用 IK） */
+  /** Create the index when absent (title / summary / content use IK). */
   private async ensureEsIndex() {
     if (!this.es) return;
     const exists = await this.es.indices.exists({ index: ES_INDEX });
@@ -291,10 +299,10 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
         },
       },
     });
-    this.logger.log(`已创建 ES 索引：${ES_INDEX}`);
+    this.logger.log(`ES index created: ${ES_INDEX}`);
   }
 
-  /** 已有索引补可见性字段（旧 mapping 没有 isPublic） */
+  /** Add visibility fields to an existing index whose mapping lacks isPublic. */
   private async ensureVisibilityMapping() {
     if (!this.es) return;
     try {
@@ -308,7 +316,9 @@ export class SearchIndexService implements OnModuleInit, OnModuleDestroy {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`kh_document 可见性 mapping 更新失败：${message}`);
+      this.logger.warn(
+        `kh_document visibility mapping update failed: ${message}`,
+      );
     }
   }
 }

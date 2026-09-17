@@ -3,16 +3,16 @@ import { scalarToString } from '../../../common/scalar-string';
 import { cleanMarkdown, toMarkdownTable } from '../utils/markdown.util';
 
 /**
- * 将 XLSX 解析为 Markdown。
+ * Parse XLSX as Markdown.
  *
- * 整体流程：
- * 1. exceljs 加载工作簿；
- * 2. 每个 Sheet → `## SheetName` + Markdown 表格（首行作表头）；
- * 3. 单元格值经 cellToString 统一成字符串（公式取 result、富文本拼接等）；
- * 4. 列数按整表最大列对齐后交给 toMarkdownTable。
+ * Flow:
+ * 1. exceljs loads the workbook.
+ * 2. Each sheet becomes `## SheetName` plus a Markdown table with the first row as its header.
+ * 3. cellToString normalizes cell values to strings (formula results, rich text, and so on).
+ * 4. Align columns to the widest row before passing them to toMarkdownTable.
  *
- * 空 Sheet 仍保留标题与空行，避免丢 sheet 名信息。
- * 调用方（FileParserService）在 exceljs 失败时会降级 officeparser。
+ * Empty sheets retain their heading and blank line so sheet names are not lost.
+ * FileParserService falls back to officeparser when exceljs fails.
  */
 export async function parseXlsx(buffer: Buffer): Promise<string> {
   const workbook = new ExcelJS.Workbook();
@@ -29,7 +29,7 @@ export async function parseXlsx(buffer: Buffer): Promise<string> {
     sheet.eachRow({ includeEmpty: false }, (row) => {
       const values = row.values as Array<ExcelJS.CellValue | undefined>;
       const cells: string[] = [];
-      // exceljs row.values 下标从 1 开始；actualCellCount 可能小于稀疏行的真实末列
+      // exceljs row.values is 1-based; actualCellCount may be smaller than a sparse row's true last column.
       const last = Math.max(row.actualCellCount, (values?.length ?? 1) - 1);
       maxCols = Math.max(maxCols, last);
       for (let c = 1; c <= last; c++) {
@@ -43,7 +43,7 @@ export async function parseXlsx(buffer: Buffer): Promise<string> {
       return;
     }
 
-    // 各行列数可能不等，右侧补空串再出表
+    // Rows may have different widths; pad the right side with empty strings.
     const normalized = rows.map((r) => {
       const copy = [...r];
       while (copy.length < maxCols) copy.push('');
@@ -57,10 +57,10 @@ export async function parseXlsx(buffer: Buffer): Promise<string> {
 }
 
 /**
- * 将 exceljs 单元格值转为展示用字符串。
+ * Convert an exceljs cell value to a display string.
  *
- * 兼容：原始类型、Date、公式（取 result）、超链接（取 text）、富文本、共享公式。
- * 无法识别的对象退回 String(value)。
+ * Supports primitive values, Date, formulas (result), hyperlinks (text), rich text, and shared formulas.
+ * Unknown objects fall back to String(value).
  */
 function cellToString(value: ExcelJS.CellValue): string {
   if (value == null) return '';
@@ -73,19 +73,19 @@ function cellToString(value: ExcelJS.CellValue): string {
   if (value instanceof Date) return value.toISOString();
 
   if (typeof value === 'object') {
-    // 公式单元格：优先展示计算结果
+    // Formula cells: prefer the calculated result.
     if ('result' in value && value.result != null) {
       return cellToString(value.result);
     }
-    // 超链接等：{ text, hyperlink }
+    // Hyperlinks and similar values: { text, hyperlink }.
     if ('text' in value && typeof value.text === 'string') {
       return value.text;
     }
-    // 富文本：拼接各 run
+    // Rich text: join each run.
     if ('richText' in value && Array.isArray(value.richText)) {
       return value.richText.map((t) => t.text).join('');
     }
-    // 仅有公式、尚未/无法拿到 result
+    // Formula only, with no available result.
     if ('sharedFormula' in value || 'formula' in value) {
       const result = (value as { result?: ExcelJS.CellValue }).result;
       return result != null ? cellToString(result) : '';

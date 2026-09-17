@@ -9,7 +9,7 @@ import {
   MinLength,
 } from 'class-validator';
 
-/** 会话列表分页 */
+/** Paginated conversation list. */
 export class QuerySessionDto {
   @IsOptional()
   @Type(() => Number)
@@ -25,7 +25,7 @@ export class QuerySessionDto {
   pageSize?: number = 20;
 }
 
-/** 新建空会话 */
+/** Create an empty conversation. */
 export class CreateSessionDto {
   @IsOptional()
   @IsString()
@@ -33,7 +33,7 @@ export class CreateSessionDto {
   title?: string;
 }
 
-/** 重命名会话 */
+/** Rename a conversation. */
 export class UpdateSessionDto {
   @IsString()
   @MinLength(1)

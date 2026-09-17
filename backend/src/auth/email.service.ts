@@ -22,13 +22,13 @@ export class EmailService {
 
     await this.mailer.sendMail({
       to: email,
-      subject: '激活您的知识库账户',
-      text: `您好 ${username}，请点击以下链接激活账户（24 小时内有效）：\n${link}`,
+      subject: 'Activate your Knowledge Hub account',
+      text: `Hello ${username}, click the following link to activate your account (valid for 24 hours):\n${link}`,
       html: `
-        <p>您好 <strong>${username}</strong>，</p>
-        <p>欢迎注册知识库，请点击下方链接激活账户（24 小时内有效）：</p>
+        <p>Hello <strong>${username}</strong>,</p>
+        <p>Welcome to Knowledge Hub. Click the link below to activate your account (valid for 24 hours):</p>
         <p><a href="${link}">${link}</a></p>
-        <p>如非本人操作，请忽略此邮件。</p>
+        <p>If you did not request this, you can ignore this email.</p>
       `,
     });
   }
@@ -40,14 +40,14 @@ export class EmailService {
   ): Promise<void> {
     await this.mailer.sendMail({
       to: email,
-      subject: '密码重置验证码',
-      text: `您好 ${username}，您的密码重置验证码是：${code}，10 分钟内有效，请勿泄露。`,
+      subject: 'Your password reset code',
+      text: `Hello ${username}, your password reset code is ${code}. It is valid for 10 minutes. Do not share it.`,
       html: `
-        <p>您好 <strong>${username}</strong>，</p>
-        <p>您正在重置密码，验证码为：</p>
+        <p>Hello <strong>${username}</strong>,</p>
+        <p>You requested a password reset. Your verification code is:</p>
         <p style="font-size:24px;font-weight:bold;letter-spacing:4px;">${code}</p>
-        <p>验证码 10 分钟内有效，请勿泄露给他人。</p>
-        <p>如非本人操作，请忽略此邮件。</p>
+        <p>This code is valid for 10 minutes. Do not share it with anyone.</p>
+        <p>If you did not request this, you can ignore this email.</p>
       `,
     });
   }

@@ -32,7 +32,7 @@ export default function DocumentEditPage() {
       .then((next) => {
         if (!canWriteDocument(user, next)) {
           setForbidden(true)
-          message.error('无权编辑该文档')
+          message.error('You do not have permission to edit this document')
           return
         }
         setDoc(next)
@@ -48,9 +48,9 @@ export default function DocumentEditPage() {
       .catch((error) => {
         if (error instanceof ApiError && error.status === 403) {
           setForbidden(true)
-          message.error('无权查看该文档')
+          message.error('You do not have permission to view this document')
         } else {
-          message.error(error instanceof ApiError ? error.message : '加载失败')
+          message.error(error instanceof ApiError ? error.message : 'Failed to load document')
         }
       })
       .finally(() => setLoading(false))
@@ -62,7 +62,7 @@ export default function DocumentEditPage() {
       label: team.teamName,
     }))
     if (doc?.teamId && !options.some((item) => item.value === doc.teamId)) {
-      options.push({ value: doc.teamId, label: '当前团队' })
+      options.push({ value: doc.teamId, label: 'Current team' })
     }
     return options
   }, [teams, doc?.teamId])
@@ -78,8 +78,8 @@ export default function DocumentEditPage() {
   if (forbidden) {
     return (
       <div className="kh-page">
-        <Empty description="无权编辑该文档">
-          <Button onClick={() => navigate('/documents')}>返回列表</Button>
+        <Empty description="You do not have permission to edit this document">
+          <Button onClick={() => navigate('/documents')}>Back to documents</Button>
         </Empty>
       </div>
     )
@@ -87,9 +87,9 @@ export default function DocumentEditPage() {
 
   return (
     <div className="kh-page">
-      <h2 style={{ marginTop: 0 }}>{isNew ? '新建文档' : '编辑文档'}</h2>
+      <h2 style={{ marginTop: 0 }}>{isNew ? 'New document' : 'Edit document'}</h2>
       <p className="kh-access-hint">
-        公开：所有登录用户可见。指定团队：发布后团队成员可见。都不选：仅自己可见。
+        Public: visible to all signed-in users. Team: visible to team members after publishing. Neither: visible only to you.
       </p>
       <Form
         form={form}
@@ -117,59 +117,59 @@ export default function DocumentEditPage() {
                 ...payload,
                 status: 0,
               })
-              message.success('已保存为草稿')
+              message.success('Saved as draft')
               navigate(`/documents/${created.id}`)
             } else if (id) {
               await documentApi.update(id, payload)
-              message.success('已保存')
+              message.success('Saved')
               navigate(`/documents/${id}`)
             }
           } catch (error) {
-            message.error(error instanceof ApiError ? error.message : '保存失败')
+            message.error(error instanceof ApiError ? error.message : 'Save failed')
           }
         }}
       >
-        <Form.Item name="title" label="标题" rules={[{ required: true }]}>
+        <Form.Item name="title" label="Title" rules={[{ required: true }]}>
           <Input />
         </Form.Item>
-        <Form.Item name="summary" label="摘要">
+        <Form.Item name="summary" label="Summary">
           <Input.TextArea rows={2} />
         </Form.Item>
-        <Form.Item name="tags" label="标签">
-          <Input placeholder="逗号分隔，如 SOP,发布" />
+        <Form.Item name="tags" label="Tags">
+          <Input placeholder="Comma-separated, e.g. SOP, release" />
         </Form.Item>
         <Form.Item
           name="isPublic"
-          label="公开"
+          label="Public"
           valuePropName="checked"
-          extra="打开后，已发布文档对所有登录用户可见"
+          extra="When enabled, published documents are visible to all signed-in users."
         >
           <Switch />
         </Form.Item>
         <Form.Item
           name="teamId"
-          label="所属团队"
+          label="Team"
           extra={
             teamOptions.length
-              ? '发布后，该团队成员可见（即使未公开）'
-              : '你尚未加入任何团队，只能设为公开或仅自己可见'
+              ? 'Visible to team members after publishing, even when not public.'
+              : 'You are not a member of any team. Only public or private visibility is available.'
           }
         >
           <Select
             allowClear
-            placeholder="不指定则仅自己可见（未公开时）"
+            placeholder="Leave empty for private visibility when not public"
             options={teamOptions}
             disabled={!teamOptions.length}
           />
         </Form.Item>
-        <Form.Item name="content" label="正文（Markdown）" rules={[{ required: true }]}>
+        <Form.Item name="content" label="Content (Markdown)" rules={[{ required: true }]}>
           <Input.TextArea rows={18} />
         </Form.Item>
         <Button type="primary" htmlType="submit">
-          保存
+          Save
         </Button>
         <Button style={{ marginLeft: 8 }} onClick={() => navigate(-1)}>
-          取消
+          Cancel
         </Button>
       </Form>
     </div>

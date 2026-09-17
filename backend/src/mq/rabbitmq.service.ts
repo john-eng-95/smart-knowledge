@@ -47,7 +47,7 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     if (!this.enabled) {
-      this.logger.warn('RabbitMQ 已禁用（RABBITMQ_ENABLED=false）');
+      this.logger.warn('RabbitMQ is disabled (RABBITMQ_ENABLED=false)');
       return;
     }
 
@@ -60,7 +60,9 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
       this.config.get<string>('RABBITMQ_CONNECT_TIMEOUT_MS', '15000'),
     );
 
-    this.logger.log(`正在连接 RabbitMQ：${safeUrl}（超时 ${timeoutMs}ms）`);
+    this.logger.log(
+      `Connecting to RabbitMQ: ${safeUrl} (timeout ${timeoutMs}ms)`,
+    );
 
     this.connection = amqp.connect([url]);
     this.connection.on('connect', (arg) => {
@@ -68,21 +70,27 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
         typeof arg === 'object' && arg && 'url' in arg
           ? String((arg as { url?: string }).url ?? url)
           : url;
-      this.logger.log(`RabbitMQ 已连接：${this.redactAmqpUrl(connectedUrl)}`);
+      this.logger.log(
+        `RabbitMQ connected: ${this.redactAmqpUrl(connectedUrl)}`,
+      );
     });
     this.connection.on('disconnect', (err) =>
-      this.logger.warn(`RabbitMQ 断开：${this.errorMessage(err?.err ?? err)}`),
+      this.logger.warn(
+        `RabbitMQ disconnected: ${this.errorMessage(err?.err ?? err)}`,
+      ),
     );
     this.connection.on('connectFailed', (err) =>
       this.logger.error(
-        `RabbitMQ 连接失败：${this.errorMessage(err?.err ?? err)}（url=${safeUrl}）`,
+        `RabbitMQ connection failed: ${this.errorMessage(err?.err ?? err)} (url=${safeUrl})`,
       ),
     );
 
     this.channel = this.connection.createChannel({
       json: true,
       setup: async (ch: ConfirmChannel) => {
-        this.logger.log('RabbitMQ channel setup：声明拓扑并绑定消费者');
+        this.logger.log(
+          'RabbitMQ channel setup: declaring topology and binding consumers',
+        );
         await this.assertTopology(ch);
         await this.bindConsumers(ch);
       },
@@ -95,16 +103,16 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
           setTimeout(() => {
             reject(
               new Error(
-                `RabbitMQ 连接超时（${timeoutMs}ms）：${safeUrl}。请检查服务是否启动、5672 是否被其他容器占用、账号密码是否正确`,
+                `RabbitMQ connection timed out (${timeoutMs}ms): ${safeUrl}. Check that the service is running, port 5672 is not occupied by another container, and the credentials are correct`,
               ),
             );
           }, timeoutMs);
         }),
       ]);
-      this.logger.log('RabbitMQ channel 就绪');
+      this.logger.log('RabbitMQ channel ready');
     } catch (error) {
       const message = this.errorMessage(error);
-      this.logger.error(`RabbitMQ 初始化失败：${message}`);
+      this.logger.error(`RabbitMQ initialization failed: ${message}`);
       await this.connection.close().catch(() => undefined);
       this.connection = null;
       this.channel = null;
@@ -112,7 +120,7 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** 日志里隐藏 AMQP 密码 */
+  /** Redact the AMQP password from logs. */
   private redactAmqpUrl(url: string) {
     return url.replace(/\/\/([^:/@]+):([^@]+)@/, '//$1:***@');
   }
@@ -135,7 +143,7 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
     await this.connection?.close();
   }
 
-  /** 注册队列消费者（在模块 init 前/后均可；连接就绪后生效） */
+  /** Register a queue consumer; it takes effect when the connection is ready. */
   registerHandler(queue: string, handler: MessageHandler) {
     this.handlers.set(queue, handler);
   }
@@ -147,7 +155,7 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
   ): Promise<boolean> {
     if (!this.enabled || !this.channel) {
       this.logger.warn(
-        `跳过发消息（MQ 不可用）：exchange=${exchange}, rk=${routingKey}`,
+        `Skipping message publish (MQ unavailable): exchange=${exchange}, rk=${routingKey}`,
       );
       return false;
     }
@@ -161,7 +169,7 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `发消息失败：exchange=${exchange}, rk=${routingKey}, error=${message}`,
+        `Message publish failed: exchange=${exchange}, rk=${routingKey}, error=${message}`,
       );
       return false;
     }
@@ -191,7 +199,7 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
     await ch.bindQueue(KG_GRAPH_QUEUE, KG_GRAPH_EXCHANGE, KG_RK_BUILD_BY_IDS);
     await ch.bindQueue(KG_GRAPH_QUEUE, KG_GRAPH_EXCHANGE, KG_RK_DELETE);
 
-    this.logger.log('RabbitMQ 拓扑已声明（RAG + Search + KG）');
+    this.logger.log('RabbitMQ topology declared (RAG + Search + KG)');
   }
 
   private async bindConsumers(ch: ConfirmChannel) {
@@ -203,12 +211,12 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
           .then(() => ch.ack(msg))
           .catch((error: unknown) => {
             this.logger.error(
-              `消费失败 queue=${queue}: ${this.errorMessage(error)}`,
+              `Message consumption failed queue=${queue}: ${this.errorMessage(error)}`,
             );
             ch.nack(msg, false, false);
           });
       });
-      this.logger.log(`已注册消费者：${queue}`);
+      this.logger.log(`Consumer registered: ${queue}`);
     }
   }
 }

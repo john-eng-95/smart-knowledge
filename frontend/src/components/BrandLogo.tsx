@@ -1,4 +1,4 @@
-/** Knowledge Hub 品牌标：中心节点向外辐射，表示知识汇聚 */
+/** Knowledge Hub mark: a central node radiating outward to represent knowledge aggregation. */
 export function BrandLogo({ size = 28 }: { size?: number }) {
   return (
     <svg

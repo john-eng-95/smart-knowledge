@@ -53,7 +53,7 @@ export class UserService {
       where: { id: userId, deleted: false },
     });
     if (!user) {
-      throw new NotFoundException('用户不存在');
+      throw new NotFoundException('User not found');
     }
     return user;
   }
@@ -106,7 +106,7 @@ export class UserService {
   async buildAuthUser(userId: string): Promise<AuthUser> {
     const user = await this.findByIdOrThrow(userId);
     if (user.status !== 1) {
-      throw new UnauthorizedException('账户已禁用');
+      throw new UnauthorizedException('Account is disabled');
     }
     const roles = await this.getRoleCodes(userId);
     const permissions =
@@ -120,17 +120,19 @@ export class UserService {
   ): Promise<AuthUser> {
     const user = await this.findByUsername(username);
     if (!user) {
-      throw new UnauthorizedException('用户名或密码错误');
+      throw new UnauthorizedException('Invalid username or password');
     }
     if (user.status !== 1) {
-      throw new UnauthorizedException('账户已禁用');
+      throw new UnauthorizedException('Account is disabled');
     }
     if (user.emailVerified === 0) {
-      throw new UnauthorizedException('账户未激活，请先验证邮箱');
+      throw new UnauthorizedException(
+        'Account is not activated; verify your email first',
+      );
     }
     const ok = await compare(password, user.password);
     if (!ok) {
-      throw new UnauthorizedException('用户名或密码错误');
+      throw new UnauthorizedException('Invalid username or password');
     }
     const roles = await this.getRoleCodes(user.id);
     const permissions = await this.permissionService.getUserPermissionCodes(
@@ -151,11 +153,11 @@ export class UserService {
   }> {
     const exists = await this.findByUsername(input.username);
     if (exists) {
-      throw new ConflictException('用户名已存在');
+      throw new ConflictException('Username already exists');
     }
     if (input.email) {
       const emailUsed = await this.findByEmail(input.email);
-      if (emailUsed) throw new ConflictException('邮箱已被使用');
+      if (emailUsed) throw new ConflictException('Email is already in use');
     }
 
     const userId = nextSnowflakeId();
@@ -178,11 +180,11 @@ export class UserService {
     };
   }
 
-  /** 管理员创建用户 */
+  /** Create a user as an administrator. */
   async createUser(dto: CreateUserDto): Promise<string> {
     const exists = await this.findByUsername(dto.username);
     if (exists) {
-      throw new ConflictException('用户名已存在');
+      throw new ConflictException('Username already exists');
     }
 
     const userId = nextSnowflakeId();
@@ -262,7 +264,7 @@ export class UserService {
     return this.getRoleCodes(userId);
   }
 
-  /** 全量替换用户角色 */
+  /** Replace all roles assigned to a user. */
   async replaceRoles(userId: string, roleCodes: string[]): Promise<string[]> {
     await this.findByIdOrThrow(userId);
 
@@ -272,7 +274,7 @@ export class UserService {
     if (roles.length !== roleCodes.length) {
       const found = new Set(roles.map((r) => r.roleCode));
       const missing = roleCodes.filter((c) => !found.has(c));
-      throw new NotFoundException(`角色不存在: ${missing.join(', ')}`);
+      throw new NotFoundException(`Roles not found: ${missing.join(', ')}`);
     }
 
     await this.userRoleRepo.delete({ userId });
@@ -291,7 +293,7 @@ export class UserService {
   async assignRole(userId: string, roleCode: string): Promise<void> {
     const role = await this.roleRepo.findOne({ where: { roleCode } });
     if (!role) {
-      throw new NotFoundException(`角色 ${roleCode} 不存在`);
+      throw new NotFoundException(`Role ${roleCode} not found`);
     }
     const exists = await this.userRoleRepo.findOne({
       where: { userId, roleId: role.id },
@@ -347,7 +349,7 @@ export class UserService {
   ): Promise<void> {
     const user = await this.findByIdOrThrow(userId);
     const ok = await compare(oldPassword, user.password);
-    if (!ok) throw new BadRequestException('原密码错误');
+    if (!ok) throw new BadRequestException('Current password is incorrect');
     user.password = await hash(newPassword, 10);
     await this.userRepo.save(user);
   }
@@ -363,18 +365,20 @@ export class UserService {
     newPassword: string,
   ): Promise<void> {
     const user = await this.findByEmail(email);
-    if (!user) throw new NotFoundException('该邮箱未注册');
+    if (!user)
+      throw new NotFoundException('No account is registered for this email');
     user.password = await hash(newPassword, 10);
     await this.userRepo.save(user);
   }
 
   async activateEmail(userId: string): Promise<string> {
     const user = await this.findByIdOrThrow(userId);
-    if (user.emailVerified === 1) return '账户已激活，请直接登录';
+    if (user.emailVerified === 1)
+      return 'Account is already activated; please log in';
     user.emailVerified = 1;
     user.status = 1;
     await this.userRepo.save(user);
-    return '账户激活成功，请登录';
+    return 'Account activated successfully; please log in';
   }
 
   async getUserStatistics(userId: string) {

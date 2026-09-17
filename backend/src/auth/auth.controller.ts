@@ -51,10 +51,10 @@ export class AuthController {
     return this.authService.resetPasswordByEmail(dto);
   }
 
-  /** 无状态 JWT：客户端丢弃 token 即可 */
+  /** Stateless JWT: the client only needs to discard the token. */
   @Post('logout')
   logout() {
-    return { message: '已退出登录' };
+    return { message: 'Signed out' };
   }
 
   @Get('me')

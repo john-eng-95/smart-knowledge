@@ -5,24 +5,24 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { DocumentChunk } from './types/pipeline.types';
 
 /**
- * 文档分块服务（基于 LangChain RecursiveCharacterTextSplitter / markdown）
+ * Document chunking service (based on LangChain RecursiveCharacterTextSplitter / Markdown).
  *
- * <p>为什么要分块？</p>
- * RAG 不能整篇文档直接向量化或喂给 LLM：
- * - Embedding 有长度上限，超长会被截断丢信息
- * - 检索时需要「段落级」命中，整篇召回噪声太大
+ * <p>Why chunk documents?</p>
+ * RAG cannot embed or send an entire document to an LLM:
+ * - Embeddings have length limits, so long input is truncated.
+ * - Retrieval needs paragraph-level matches; retrieving a whole document adds too much noise.
  *
- * <p>分块策略：</p>
+ * <p>Chunking strategy:</p>
  * <ol>
- *   <li>用 Markdown 感知分隔符（标题 / 代码块 / 段落…）递归切分</li>
- *   <li>按 chunkSize / chunkOverlap 控制块大小与重叠</li>
- *   <li>从块内标题行推断 heading，跨块继承上一标题并必要时前缀补全</li>
+ *   <li>Recursively split with Markdown-aware separators (headings / code blocks / paragraphs).</li>
+ *   <li>Control chunk size and overlap with chunkSize / chunkOverlap.</li>
+ *   <li>Infer heading from heading lines, inherit the previous heading across chunks, and add prefixes when needed.</li>
  * </ol>
  *
- * <p>配置：</p>
- * - RAG_CHUNK_SIZE：目标 token 数（默认 512）
- * - RAG_CHUNK_OVERLAP：重叠 token 数（默认 64）
- * - 换算：CHARS_PER_TOKEN=2，即 512 token ≈ 1024 字符
+ * <p>Configuration:</p>
+ * - RAG_CHUNK_SIZE: target token count (default 512).
+ * - RAG_CHUNK_OVERLAP: overlap token count (default 64).
+ * - Conversion: CHARS_PER_TOKEN=2, so 512 tokens is approximately 1,024 characters.
  */
 @Injectable()
 export class ChunkingService {
@@ -30,12 +30,12 @@ export class ChunkingService {
   private readonly splitter: RecursiveCharacterTextSplitter;
 
   /**
-   * token → 字符的粗略换算系数。
-   * 中英文混合场景偏保守：约 1 token ≈ 2 字符。
+   * Approximate token-to-character conversion factor.
+   * Conservative for mixed English/CJK content: approximately 1 token = 2 characters.
    */
   private static readonly CHARS_PER_TOKEN = 2.0;
 
-  /** 匹配块内 Markdown ATX 标题行 */
+  /** Match Markdown ATX heading lines in a chunk. */
   private static readonly HEADING_LINE = /^(#{1,6})\s+(.+)$/m;
 
   constructor(config: ConfigService) {
@@ -48,7 +48,7 @@ export class ChunkingService {
       chunkOverlapTokens * ChunkingService.CHARS_PER_TOKEN,
     );
 
-    // 内置 markdown 分隔符未含 H1（\n# ），补上以免一级标题不切分
+    // The built-in Markdown separators omit H1 (\n#); add it so top-level headings split chunks.
     this.splitter = new RecursiveCharacterTextSplitter({
       chunkSize,
       chunkOverlap,
@@ -61,12 +61,12 @@ export class ChunkingService {
   }
 
   /**
-   * 将一篇文档正文切成可索引的 DocumentChunk 列表。
+   * Split document content into indexable DocumentChunk records.
    *
-   * @param params.content  Markdown 正文
-   * @param params.documentId 文档雪花 ID（写入 chunk 元数据，供按文档删除）
-   * @param params.documentTitle 文档标题（检索展示用）
-   * @returns 分块结果；内容为空时返回 []
+   * @param params.content Markdown content.
+   * @param params.documentId Document Snowflake ID (stored in chunk metadata for document-level deletion).
+   * @param params.documentTitle Document title (shown in retrieval results).
+   * @returns Chunked records; returns [] for empty content.
    */
   async chunk(params: {
     content: string;
@@ -81,7 +81,9 @@ export class ChunkingService {
   }): Promise<DocumentChunk[]> {
     const { content, documentId, documentTitle } = params;
     if (!content?.trim()) {
-      this.logger.warn(`文档内容为空，跳过分块：documentId=${documentId}`);
+      this.logger.warn(
+        `Document content is empty; skipping chunking: documentId=${documentId}`,
+      );
       return [];
     }
 
@@ -98,7 +100,7 @@ export class ChunkingService {
         currentHeading = headingInChunk;
       }
 
-      // 同章节后续块通常不含标题行：前缀补上，便于检索命中时带上下文
+      // Later chunks in the same section often have no heading; add a prefix to preserve context in retrieval.
       let chunkContent = trimmed;
       if (currentHeading && !ChunkingService.HEADING_LINE.test(trimmed)) {
         chunkContent = `${currentHeading}\n\n${trimmed}`;
@@ -130,12 +132,12 @@ export class ChunkingService {
     });
 
     this.logger.debug(
-      `文档分块完成：documentId=${documentId}, totalChunks=${total}`,
+      `Document chunking completed: documentId=${documentId}, totalChunks=${total}`,
     );
     return chunks;
   }
 
-  /** 取块内第一个 ATX 标题文案（不含 #） */
+  /** Get the first ATX heading text in a chunk, without # markers. */
   private extractHeading(text: string): string | null {
     const match = text.match(ChunkingService.HEADING_LINE);
     return match?.[2]?.trim() || null;

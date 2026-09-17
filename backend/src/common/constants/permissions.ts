@@ -1,6 +1,6 @@
 import { RoleCode } from './roles';
 
-/** 运行时校验用的权限编码 */
+/** Permission codes used for runtime authorization checks. */
 export const PermissionCode = {
   documentList: 'document:list',
   documentCreate: 'document:create',
@@ -10,7 +10,7 @@ export const PermissionCode = {
   search: 'search',
 } as const;
 
-/** 管理员自动拥有的操作权限 */
+/** Operation permissions automatically granted to administrators. */
 export const ADMIN_OPERATION_PERMISSIONS = [
   'document:list',
   'document:create',
@@ -35,7 +35,7 @@ export const ADMIN_OPERATION_PERMISSIONS = [
 
 export const ADMIN_ROLES = [RoleCode.ADMIN] as const;
 
-/** 1 菜单 2 按钮 3 接口 */
+/** 1 = menu, 2 = button, 3 = API. */
 export enum PermissionType {
   Menu = 1,
   Button = 2,

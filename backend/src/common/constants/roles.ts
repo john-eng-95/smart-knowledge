@@ -1,4 +1,4 @@
-/** 预置角色编码（与 kh_role.role_code 一致） */
+/** Built-in role codes matching kh_role.role_code. */
 export const RoleCode = {
   ADMIN: 'ROLE_ADMIN',
   REVIEWER: 'ROLE_REVIEWER',

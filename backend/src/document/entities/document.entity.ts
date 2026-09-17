@@ -8,17 +8,17 @@ import {
 import { bigintTransformer } from '../../common/transformers/bigint.transformer';
 import { DocumentStatus } from '../document-status';
 
-/** 兼容旧 import 路径：import { DocumentStatus } from './entities/document.entity' */
+/** Preserve the legacy import path: import { DocumentStatus } from './entities/document.entity'. */
 export { DocumentStatus };
 
-/** 文档元数据（PostgreSQL kh_document） */
+/** Document metadata (PostgreSQL kh_document). */
 @Entity('kh_document')
 export class DocumentEntity {
-  /** 雪花 ID */
+  /** Snowflake ID. */
   @PrimaryColumn({ type: 'bigint', transformer: bigintTransformer })
   id: string;
 
-  /** 标题 */
+  /** Title. */
   @Column({ type: 'varchar' })
   title: string;
 
@@ -26,11 +26,11 @@ export class DocumentEntity {
   @Column({ name: 'content_id', type: 'varchar', unique: true })
   contentId: string;
 
-  /** 摘要 */
+  /** Summary. */
   @Column({ type: 'varchar', nullable: true })
   summary?: string | null;
 
-  /** 分类 ID */
+  /** Category ID. */
   @Column({
     name: 'category_id',
     type: 'bigint',
@@ -39,7 +39,7 @@ export class DocumentEntity {
   })
   categoryId?: string | null;
 
-  /** 团队 ID */
+  /** Team ID. */
   @Column({
     name: 'team_id',
     type: 'bigint',
@@ -48,7 +48,7 @@ export class DocumentEntity {
   })
   teamId?: string | null;
 
-  /** 作者 ID */
+  /** Author ID. */
   @Column({
     name: 'author_id',
     type: 'bigint',
@@ -57,59 +57,59 @@ export class DocumentEntity {
   })
   authorId?: string | null;
 
-  /** 封面图 URL */
+  /** Cover image URL. */
   @Column({ name: 'cover_image', type: 'varchar', nullable: true })
   coverImage?: string | null;
 
-  /** 标签（逗号分隔） */
+  /** Comma-separated tags. */
   @Column({ type: 'varchar', nullable: true })
   tags?: string | null;
 
-  /** 状态：0 草稿 / 1 已发布 / 2 已归档 / 3 待审核 */
+  /** Status: 0 Draft / 1 Published / 2 Archived / 3 Pending review. */
   @Column({ type: 'smallint', default: DocumentStatus.Draft })
   status: DocumentStatus;
 
-  /** 备注 */
+  /** Notes. */
   @Column({ type: 'varchar', nullable: true })
   remark?: string | null;
 
-  /** 浏览数 */
+  /** View count. */
   @Column({ name: 'view_count', type: 'int', default: 0 })
   viewCount: number;
 
-  /** 点赞数 */
+  /** Like count. */
   @Column({ name: 'like_count', type: 'int', default: 0 })
   likeCount: number;
 
-  /** 评论数 */
+  /** Comment count. */
   @Column({ name: 'comment_count', type: 'int', default: 0 })
   commentCount: number;
 
-  /** 收藏数 */
+  /** Favorite count. */
   @Column({ name: 'favourite_count', type: 'int', default: 0 })
   favouriteCount: number;
 
-  /** 字数 */
+  /** Word count. */
   @Column({ name: 'word_count', type: 'int', default: 0 })
   wordCount: number;
 
-  /** 发布时间 */
+  /** Publication time. */
   @Column({ name: 'publish_time', type: 'timestamp', nullable: true })
   publishTime?: Date | null;
 
-  /** 是否公开 */
+  /** Whether the document is public. */
   @Column({ name: 'is_public', type: 'boolean', default: false })
   isPublic: boolean;
 
-  /** 创建时间 */
+  /** Creation time. */
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  /** 更新时间 */
+  /** Update time. */
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
-  /** 创建人 ID */
+  /** Creator ID. */
   @Column({
     name: 'create_by',
     type: 'bigint',
@@ -118,7 +118,7 @@ export class DocumentEntity {
   })
   createBy?: string | null;
 
-  /** 更新人 ID */
+  /** Updater ID. */
   @Column({
     name: 'update_by',
     type: 'bigint',
@@ -127,7 +127,7 @@ export class DocumentEntity {
   })
   updateBy?: string | null;
 
-  /** 逻辑删除 */
+  /** Soft-delete flag. */
   @Column({ type: 'boolean', default: false })
   deleted: boolean;
 }

@@ -16,7 +16,7 @@ export default function LoginPage() {
         <div className="kh-login-title">
           <BrandLogo size={40} />
           <h1>Knowledge Hub</h1>
-          <p>登录后使用文档、检索、问答与图谱</p>
+          <p>Sign in to access documents, search, chat, and graph views</p>
         </div>
         <Form
           layout="vertical"
@@ -32,20 +32,20 @@ export default function LoginPage() {
               })
               navigate('/dashboard', { replace: true })
             } catch (error) {
-              message.error(error instanceof ApiError ? error.message : '登录失败')
+              message.error(error instanceof ApiError ? error.message : 'Sign-in failed')
             } finally {
               setLoading(false)
             }
           }}
         >
-          <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
-            <Input size="large" placeholder="用户名" />
+          <Form.Item name="username" label="Username" rules={[{ required: true }]}>
+            <Input size="large" placeholder="Username" />
           </Form.Item>
-          <Form.Item name="password" label="密码" rules={[{ required: true }]}>
-            <Input.Password size="large" placeholder="密码" />
+          <Form.Item name="password" label="Password" rules={[{ required: true }]}>
+            <Input.Password size="large" placeholder="Password" />
           </Form.Item>
           <Button type="primary" htmlType="submit" size="large" block loading={loading}>
-            登录
+            Sign in
           </Button>
         </Form>
       </Card>

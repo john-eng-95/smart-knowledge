@@ -1,6 +1,6 @@
 import { IsEmail, IsOptional, IsString } from 'class-validator';
 
-/** 当前用户更新资料 */
+/** Current user profile update payload. */
 export class UpdateProfileDto {
   @IsOptional()
   @IsEmail()

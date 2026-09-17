@@ -31,7 +31,7 @@ export default function UsersPage() {
       setTotal(res.total)
       setPage(nextPage)
     } catch (error) {
-      message.error(error instanceof ApiError ? error.message : '加载失败')
+      message.error(error instanceof ApiError ? error.message : 'Failed to load users')
     } finally {
       setLoading(false)
     }
@@ -46,12 +46,12 @@ export default function UsersPage() {
     <div className="kh-page">
       <Space style={{ marginBottom: 16 }}>
         <Input
-          placeholder="用户名 / 姓名 / 邮箱"
+          placeholder="Username / name / email"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           onPressEnter={() => void load(1)}
         />
-        <Button onClick={() => void load(1)}>查询</Button>
+        <Button onClick={() => void load(1)}>Search</Button>
         <Button
           type="primary"
           onClick={() => {
@@ -59,7 +59,7 @@ export default function UsersPage() {
             setCreateOpen(true)
           }}
         >
-          新建用户
+          New user
         </Button>
       </Space>
       <Table
@@ -68,22 +68,22 @@ export default function UsersPage() {
         dataSource={items}
         pagination={{ current: page, pageSize: 10, total, onChange: (p) => void load(p) }}
         columns={[
-          { title: '用户名', dataIndex: 'username' },
-          { title: '姓名', dataIndex: 'realName' },
-          { title: '邮箱', dataIndex: 'email' },
+          { title: 'Username', dataIndex: 'username' },
+          { title: 'Name', dataIndex: 'realName' },
+          { title: 'Email', dataIndex: 'email' },
           {
-            title: '角色',
+            title: 'Roles',
             dataIndex: 'roleCodes',
             render: (codes: string[]) => codes?.map((c) => <Tag key={c}>{c}</Tag>),
           },
           {
-            title: '状态',
+            title: 'Status',
             dataIndex: 'status',
-            render: (s: number) => (s === 1 ? '启用' : '禁用'),
+            render: (s: number) => (s === 1 ? 'Enabled' : 'Disabled'),
           },
-          { title: '最近登录', dataIndex: 'lastLoginAt', render: formatTime },
+          { title: 'Last login', dataIndex: 'lastLoginAt', render: formatTime },
           {
-            title: '操作',
+            title: 'Actions',
             render: (_: unknown, row: UserVO) => (
               <Space>
                 <a
@@ -92,7 +92,7 @@ export default function UsersPage() {
                     setNewPassword('')
                   }}
                 >
-                  重置密码
+                  Reset password
                 </a>
                 <a
                   onClick={() => {
@@ -100,7 +100,7 @@ export default function UsersPage() {
                     setRoleCodes(row.roleCodes || [])
                   }}
                 >
-                  角色
+                  Roles
                 </a>
               </Space>
             ),
@@ -108,7 +108,7 @@ export default function UsersPage() {
         ]}
       />
       <Modal
-        title="新建用户"
+        title="New user"
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => form.submit()}
@@ -125,27 +125,27 @@ export default function UsersPage() {
           }) => {
             try {
               await userApi.create(values)
-              message.success('已创建')
+              message.success('Created')
               setCreateOpen(false)
               void load(1)
             } catch (error) {
-              message.error(error instanceof ApiError ? error.message : '创建失败')
+              message.error(error instanceof ApiError ? error.message : 'Creation failed')
             }
           }}
         >
-          <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
+          <Form.Item name="username" label="Username" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="password" label="密码" rules={[{ required: true, min: 6 }]}>
+          <Form.Item name="password" label="Password" rules={[{ required: true, min: 6 }]}>
             <Input.Password />
           </Form.Item>
-          <Form.Item name="realName" label="姓名">
+          <Form.Item name="realName" label="Name">
             <Input />
           </Form.Item>
-          <Form.Item name="email" label="邮箱">
+          <Form.Item name="email" label="Email">
             <Input />
           </Form.Item>
-          <Form.Item name="roleCodes" label="角色">
+          <Form.Item name="roleCodes" label="Roles">
             <Select
               mode="multiple"
               options={roles.map((r) => ({ value: r.roleCode, label: r.roleName }))}
@@ -154,46 +154,46 @@ export default function UsersPage() {
         </Form>
       </Modal>
       <Modal
-        title={pwdUser ? `重置 ${pwdUser.username} 的密码` : '重置密码'}
+        title={pwdUser ? `Reset password for ${pwdUser.username}` : 'Reset password'}
         open={Boolean(pwdUser)}
         onCancel={() => setPwdUser(null)}
         onOk={async () => {
           if (!pwdUser) return
           if (newPassword.length < 6) {
-            message.error('密码至少 6 位')
+            message.error('Password must be at least 6 characters')
             return
           }
           try {
             await userApi.resetPassword(pwdUser.id, newPassword)
-            message.success('已重置')
+            message.success('Password reset')
             setPwdUser(null)
           } catch (error) {
-            message.error(error instanceof ApiError ? error.message : '重置失败')
+            message.error(error instanceof ApiError ? error.message : 'Reset failed')
           }
         }}
       >
         <Input.Password
-          placeholder="新密码至少 6 位"
+          placeholder="New password, at least 6 characters"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
         />
       </Modal>
       <Modal
-        title="分配角色"
+        title="Assign roles"
         open={Boolean(roleUser)}
         onCancel={() => setRoleUser(null)}
         onOk={async () => {
           if (!roleUser || !roleCodes.length) {
-            message.error('至少选择一个角色')
+            message.error('Select at least one role')
             return
           }
           try {
             await userApi.assignRoles(roleUser.id, roleCodes)
-            message.success('已更新角色')
+            message.success('Roles updated')
             setRoleUser(null)
             void load()
           } catch (error) {
-            message.error(error instanceof ApiError ? error.message : '更新失败')
+            message.error(error instanceof ApiError ? error.message : 'Update failed')
           }
         }}
       >

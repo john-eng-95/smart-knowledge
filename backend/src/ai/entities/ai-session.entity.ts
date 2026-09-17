@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { bigintTransformer } from '../../common/transformers/bigint.transformer';
 
-/** AI 会话（PostgreSQL kh_ai_session） */
+/** AI conversation (PostgreSQL kh_ai_session). */
 @Entity('kh_ai_session')
 export class AiSessionEntity {
   @PrimaryColumn({ type: 'bigint', transformer: bigintTransformer })

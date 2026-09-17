@@ -6,8 +6,8 @@ import { scalarToString } from '../../../common/scalar-string';
 const logger = new Logger('PdfParser');
 
 /**
- * 图片上传回调：解析过程中抽出的图片字节，经此函数上传后返回可访问 URL。
- * 由调用方注入（例如上传到对象存储），本模块不关心具体存储实现。
+ * Image upload callback: upload image bytes extracted during parsing and return an accessible URL.
+ * Injected by the caller (for example, an object storage adapter); this module does not depend on storage details.
  */
 export type ImageUploader = (
   bytes: Buffer,
@@ -17,28 +17,28 @@ export type ImageUploader = (
 
 export interface ParsePdfOptions {
   /**
-   * 若提供，则从 PDF 中提取图片、上传，并按页以 Markdown 图片语法写入结果。
-   * 未提供时仅输出文本（及可选的表格附录）。
+   * When provided, extract and upload PDF images and write them into the result per page using Markdown image syntax.
+   * When omitted, output text only, with optional table appendices.
    */
   uploadImage?: ImageUploader;
   /**
-   * 跳过宽或高小于该像素阈值的图片（多为装饰图标/噪点），默认 50。
-   * 会同时传给 pdf-parse 的 imageThreshold，并在本地再过滤一次。
+   * Skip images whose width or height is below this pixel threshold (usually decorative icons/noise); defaults to 50.
+   * Pass it to pdf-parse as imageThreshold and filter locally as a second check.
    */
   imageThreshold?: number;
 }
 
 /**
- * 将 PDF 解析为 Markdown。
+ * Parse a PDF as Markdown.
  *
- * 整体流程：
- * 1. 按页提取文本；
- * 2. 若提供 uploadImage，则按页提取图片 → 上传 → 记下 URL；
- * 3. 按页拼装：先文本，再该页图片的 `![](url)`；
- * 4. 尝试提取表格；若正文里尚无 Markdown 表格，则追加到文末「检测到的表格」章节；
- * 5. 无论成败，在 finally 中销毁 parser，释放底层资源。
+ * Flow:
+ * 1. Extract text page by page.
+ * 2. When uploadImage is provided, extract images per page, upload them, and record their URLs.
+ * 3. Assemble each page with text first, followed by that page's `![](url)` images.
+ * 4. Try to extract tables; append them under "Detected tables" only when the body has no Markdown table.
+ * 5. Destroy the parser in finally to release native resources regardless of success or failure.
  *
- * 图片提取失败不会中断解析，会降级为仅文本；单张图片上传失败则跳过该张。
+ * Image extraction failures do not interrupt parsing and fall back to text only; skip individual images whose uploads fail.
  */
 export async function parsePdf(
   buffer: Buffer,
@@ -48,18 +48,18 @@ export async function parsePdf(
   const threshold = options.imageThreshold ?? 50;
 
   try {
-    // ---------- 1. 文本：按页取出 ----------
+    // ---------- 1. Text: extract page by page ----------
     const textResult = await parser.getText();
     const pageTexts = textResult?.pages ?? [];
-    /** pageNumber → 该页已上传图片的 URL 列表（保持提取顺序） */
+    /** pageNumber -> URLs uploaded for that page, preserving extraction order. */
     const pageImageUrls = new Map<number, string[]>();
 
-    // ---------- 2. 图片（可选）：提取 → 过滤小图 → 上传 ----------
+    // ---------- 2. Optional images: extract -> filter small images -> upload ----------
     if (options.uploadImage) {
       try {
         const imageResult = await parser.getImage({
           imageThreshold: threshold,
-          // 只要原始字节，不要 data URL，便于直接上传
+          // Keep raw bytes rather than a data URL for direct upload.
           imageBuffer: true,
           imageDataUrl: false,
         });
@@ -68,7 +68,7 @@ export async function parsePdf(
           const urls: string[] = [];
           let imgIdx = 0;
           for (const image of page.images ?? []) {
-            // 二次过滤：pdf-parse 已按阈值筛过，这里再挡一遍异常尺寸
+            // Filter again in case pdf-parse returned an image with unexpected dimensions.
             if (
               (image.width > 0 && image.width < threshold) ||
               (image.height > 0 && image.height < threshold)
@@ -77,7 +77,8 @@ export async function parsePdf(
             }
             if (!image.data?.length) continue;
 
-            // 根据文件头嗅探 MIME，决定扩展名（webp 也按 png 扩展名上传，contentType 仍为真实类型）
+            // Detect MIME from the file header to choose an extension.
+            // Upload WebP with a png extension while preserving the real contentType.
             const contentType = sniffImageContentType(image.data);
             const ext = contentType === 'image/jpeg' ? 'jpg' : 'png';
             const fileName = `pdf_img_p${page.pageNumber}_${imgIdx++}.${ext}`;
@@ -89,9 +90,9 @@ export async function parsePdf(
               );
               urls.push(url);
             } catch (err) {
-              // 单张失败不影响同页其他图片与整份文档
+              // One failed image should not affect other images or the whole document.
               logger.warn(
-                `PDF 图片上传失败: page=${page.pageNumber}, name=${image.name}, err=${err instanceof Error ? err.message : err}`,
+                `PDF image upload failed: page=${page.pageNumber}, name=${image.name}, err=${err instanceof Error ? err.message : err}`,
               );
             }
           }
@@ -102,32 +103,32 @@ export async function parsePdf(
 
         if (pageImageUrls.size > 0) {
           logger.log(
-            `PDF 图片提取完成: ${[...pageImageUrls.values()].reduce((n, a) => n + a.length, 0)} 张`,
+            `PDF image extraction completed: ${[...pageImageUrls.values()].reduce((n, a) => n + a.length, 0)} images`,
           );
         }
       } catch (err) {
-        // 整批图片提取失败：降级为纯文本，不抛错
+        // If batch image extraction fails, fall back to text-only output.
         logger.warn(
-          `PDF 图片提取失败，继续仅文本: ${err instanceof Error ? err.message : err}`,
+          `PDF image extraction failed; continuing with text only: ${err instanceof Error ? err.message : err}`,
         );
       }
     }
 
-    // ---------- 3. 按页拼装 Markdown ----------
-    // 有分页文本时：每页「文本 + 该页图片」，页与页之间空行分隔
-    // 无分页信息时：退回全文 text，图片统一追加在后
+    // ---------- 3. Assemble Markdown page by page ----------
+    // With page text: each page contains text plus its images, separated by blank lines.
+    // Without page information: use full text and append all images.
     const parts: string[] = [];
     if (pageTexts.length > 0) {
       for (const page of pageTexts) {
         const text = (page.text ?? '').trim();
         if (text) parts.push(text);
 
-        // page.num 与图片侧的 pageNumber 对应同一页码
+        // page.num and image.pageNumber refer to the same page number.
         const urls = pageImageUrls.get(page.num) ?? [];
         for (const url of urls) {
           parts.push(`![](${url})`);
         }
-        // 该页有内容时末尾加空串，join 后形成段落间距
+        // Add an empty item after non-empty pages so join creates paragraph spacing.
         if (text || urls.length) parts.push('');
       }
     } else {
@@ -140,8 +141,8 @@ export async function parsePdf(
 
     let markdown = cleanMarkdown(parts.join('\n\n'));
 
-    // ---------- 4. 表格（尽力而为）----------
-    // 仅当正文中尚未出现 Markdown 表头分隔行（| ---）时才追加，避免与正文重复
+    // ---------- 4. Best-effort table extraction ----------
+    // Append tables only when the body has no Markdown header separator (| ---) to avoid duplicates.
     try {
       const tableResult = await parser.getTable();
       const pages = tableResult?.pages ?? [];
@@ -150,36 +151,36 @@ export async function parsePdf(
         let tableIdx = 0;
         for (const page of pages) {
           for (const table of page.tables ?? []) {
-            // pdf-parse 返回结构不固定，先归一成 string[][]
+            // pdf-parse returns varying structures; normalize them to string[][] first.
             const rows = normalizePdfTable(table);
             if (rows.length > 0) {
               tableIdx += 1;
               tableParts.push(
-                `### 表格 ${tableIdx}\n\n${toMarkdownTable(rows)}`,
+                `### Table ${tableIdx}\n\n${toMarkdownTable(rows)}`,
               );
             }
           }
         }
         if (tableParts.length > 0) {
           markdown = cleanMarkdown(
-            `${markdown}\n\n## 检测到的表格\n\n${tableParts.join('\n')}`,
+            `${markdown}\n\n## Detected tables\n\n${tableParts.join('\n')}`,
           );
         }
       }
     } catch {
-      // 表格提取失败不影响主结果
+      // Table extraction failure does not affect the primary result.
     }
 
     return markdown;
   } finally {
-    // 释放 pdf-parse / wasm 等底层资源，避免泄漏
+    // Release pdf-parse / WASM resources to avoid leaks.
     await parser.destroy();
   }
 }
 
 /**
- * 通过魔数（文件头字节）判断图片 MIME。
- * 识别失败时默认 image/png，保证上传侧总能拿到一个 contentType。
+ * Detect image MIME from magic bytes in the file header.
+ * Fall back to image/png so the upload side always receives a contentType.
  */
 function sniffImageContentType(data: Uint8Array): string {
   // JPEG: FF D8 FF
@@ -191,7 +192,7 @@ function sniffImageContentType(data: Uint8Array): string {
   ) {
     return 'image/jpeg';
   }
-  // PNG: 89 50 4E 47（即 \x89PNG）
+  // PNG: 89 50 4E 47 (that is, \x89PNG).
   if (
     data.length >= 8 &&
     data[0] === 0x89 &&
@@ -201,7 +202,7 @@ function sniffImageContentType(data: Uint8Array): string {
   ) {
     return 'image/png';
   }
-  // WebP: 以 RIFF 开头（完整格式还含 WEBP，这里只做粗判）
+  // WebP: starts with RIFF (the complete format also contains WEBP; this is a rough check).
   if (
     data.length >= 4 &&
     data[0] === 0x52 &&
@@ -215,26 +216,26 @@ function sniffImageContentType(data: Uint8Array): string {
 }
 
 /**
- * 将 pdf-parse getTable() 返回的多种可能结构，统一成二维字符串数组。
+ * Normalize the possible structures returned by pdf-parse getTable() into string[][].
  *
- * 兼容形态：
- * - string[][]：已是行列结构；
- * - 嵌套数组：逐项递归再扁平合并；
- * - { rows } / { data }：取字段后继续递归。
- * 无法识别时返回空数组。
+ * Supported shapes:
+ * - string[][]: already rows and cells.
+ * - Nested arrays: recursively normalize and flatten.
+ * - { rows } / { data }: unwrap the field and continue recursively.
+ * Return an empty array when the shape is not recognized.
  */
 function normalizePdfTable(raw: unknown): string[][] {
   if (!raw) return [];
 
   if (Array.isArray(raw)) {
     if (raw.length === 0) return [];
-    // 首元素仍是数组 → 视为「行 → 单元格」
+    // An array whose first item is an array represents rows -> cells.
     if (Array.isArray(raw[0])) {
       return (raw as unknown[][]).map((row) =>
         row.map((cell) => scalarToString(cell).trim()),
       );
     }
-    // 否则当作「多个表/多块」拼接
+    // Otherwise, treat it as multiple tables/blocks and concatenate them.
     const merged: string[][] = [];
     for (const item of raw) {
       merged.push(...normalizePdfTable(item));

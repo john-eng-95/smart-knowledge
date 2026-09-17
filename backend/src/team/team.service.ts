@@ -23,11 +23,12 @@ export class TeamService {
   ) {}
 
   /**
-   * 当前用户可访问的团队 ID（供 AuthUser.teamIds / 文档可见性使用）。
-   * 来源：成员表身份 ∪ 担任负责人；已软删团队不计入。
+   * Return team IDs accessible to the current user for AuthUser.teamIds and
+   * document visibility. Sources are memberships and team leadership; deleted
+   * teams are excluded.
    */
   async listAccessibleTeamIds(userId: string): Promise<string[]> {
-    // 成员表；负责人可能不在成员表，需单独查 kh_team.leader_id
+    // A leader may not have a membership row, so query kh_team.leader_id separately.
     const [memberRows, led] = await Promise.all([
       this.memberRepo
         .createQueryBuilder('m')
@@ -39,7 +40,7 @@ export class TeamService {
         select: ['id'],
       }),
     ]);
-    // bigint 可能是 string | number，统一成字符串再去重，避免同一团队出现两次
+    // BIGINT values may be strings or numbers; normalize them before deduplication.
     const ids = [
       ...new Set([
         ...memberRows.map((row) => String(row.teamId)),
@@ -47,7 +48,7 @@ export class TeamService {
       ]),
     ];
     if (!ids.length) return [];
-    // 成员记录可能仍指向已软删团队，再按 kh_team.deleted = false 过滤
+    // Memberships may point to deleted teams; filter again on kh_team.deleted = false.
     const teams = await this.teamRepo.find({
       where: { id: In(ids), deleted: false },
       select: ['id', 'teamName'],
@@ -86,7 +87,7 @@ export class TeamService {
     if (dto.leaderId !== undefined) team.leaderId = dto.leaderId;
     if (dto.parentId !== undefined) {
       if (dto.parentId === id) {
-        throw new BadRequestException('父团队不能是自己');
+        throw new BadRequestException('A team cannot be its own parent');
       }
       team.parentId = dto.parentId;
     }
@@ -101,7 +102,9 @@ export class TeamService {
       where: { parentId: id, deleted: false },
     });
     if (childCount > 0) {
-      throw new BadRequestException('存在子团队，无法删除');
+      throw new BadRequestException(
+        'Cannot delete a team that has child teams',
+      );
     }
     team.deleted = true;
     await this.teamRepo.save(team);
@@ -161,7 +164,7 @@ export class TeamService {
       where: { id: In(userIds), deleted: false },
     });
     if (users.length !== userIds.length) {
-      throw new NotFoundException('部分用户不存在');
+      throw new NotFoundException('Some users do not exist');
     }
     for (const userId of userIds) {
       const exists = await this.memberRepo.findOne({
@@ -206,7 +209,7 @@ export class TeamService {
     const team = await this.teamRepo.findOne({
       where: { id, deleted: false },
     });
-    if (!team) throw new NotFoundException('团队不存在');
+    if (!team) throw new NotFoundException('Team not found');
     return team;
   }
 }
