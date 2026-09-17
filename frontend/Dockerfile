@@ -5,10 +5,9 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY backend/package.json backend/package.json
-COPY frontend/package.json frontend/package.json
+COPY frontend frontend
 RUN pnpm install --frozen-lockfile
 
-COPY frontend frontend
 RUN pnpm --filter knowledge-hub-frontend run build
 
 FROM nginx:1.27-alpine

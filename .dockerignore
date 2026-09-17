@@ -1,0 +1,12 @@
+.git
+.migration-*
+.env
+.env.*
+!.env.example
+**/node_modules
+**/dist
+**/coverage
+**/volumes
+**/.vite
+**/*.tsbuildinfo
+*.log
