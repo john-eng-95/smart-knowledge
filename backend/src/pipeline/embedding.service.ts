@@ -16,7 +16,7 @@ export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
   /** 向量维度，需与 ES dense_vector.dims 一致（kh_chunk.embedding） */
   private readonly dimension: number;
-  private readonly embeddings: OpenAIEmbeddings;
+  private readonly embeddings: OpenAIEmbeddings | null;
 
   constructor(config: ConfigService) {
     this.dimension = Number(config.get('EMBEDDING_DIMENSION', 1024));
@@ -39,9 +39,11 @@ export class EmbeddingService {
       config.get<string>('DASHSCOPE_API_KEY') ||
       config.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
-      throw new Error(
-        '未配置 EMBEDDING_API_KEY / DASHSCOPE_API_KEY / OPENAI_API_KEY',
+      this.logger.warn(
+        'Embedding provider is not configured; vectorization is unavailable',
       );
+      this.embeddings = null;
+      return;
     }
 
     const baseUrl = config.get<string>(
@@ -72,6 +74,11 @@ export class EmbeddingService {
   /** 批量嵌入（内部按 EMBEDDING_BATCH_SIZE 切片） */
   async embedBatch(texts: string[]): Promise<number[][]> {
     if (!texts.length) return [];
+    if (!this.embeddings) {
+      throw new Error(
+        'Set EMBEDDING_API_KEY, DASHSCOPE_API_KEY, or OPENAI_API_KEY to enable vectorization',
+      );
+    }
 
     const vectors = await this.embeddings.embedDocuments(texts);
     this.logger.debug(`嵌入完成：count=${vectors.length}`);

@@ -126,6 +126,7 @@ services:
   rustfs:
     image: rustfs/rustfs:latest
     restart: unless-stopped
+    user: "0:0"
     environment:
       RUSTFS_VOLUMES: /data/rustfs0
       RUSTFS_ADDRESS: 0.0.0.0:9000

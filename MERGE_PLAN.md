@@ -46,7 +46,7 @@ These baseline results describe the source projects before migration.
 Status checked on 2026-09-17:
 
 - Completed: backend history was relocated to `backend/`, retaining 23 backend
-  commits. The monorepo snapshot is on branch `main` with 26 commits total.
+  commits. The monorepo snapshot is on branch `main` with 27 commits total.
 - Completed: frontend snapshot from `v15` commit `f209569` was imported into
   `frontend/`; its `.git` directory, history, and tracked `.env` were not
   imported. The historical `VITE_API_BASE` value was a relative path.
@@ -56,14 +56,17 @@ Status checked on 2026-09-17:
 - Completed: frozen-lockfile installation, type checks, unit tests, backend
   e2e smoke test, lint, production builds, Compose configuration validation,
   Docker image builds, and frontend Nginx HTTP smoke test passed locally.
+- Completed: an isolated Compose stack started with all nine services healthy.
+  Frontend routing, valid and invalid login, document listing, keyword search,
+  and graph overview endpoints passed HTTP smoke checks.
 - Completed: Gitleaks scanned the complete reachable candidate history and the current
   repository tree with no findings. Historical credentials and a copied
   template token were replaced in the candidate history.
 - Pending: frontend lint reports 25 warnings, including hook dependency,
   render-time ref access, and Fast Refresh warnings.
-- Pending: the full Compose stack and service-backed application workflows
-  were not started because the source project's containers are already using
-  the default host ports. Browser-based Playwright coverage is not implemented.
+- Pending: browser-based Playwright coverage is not implemented. Upload parsing,
+  vectorization, chat, and other external-provider workflows were not exercised;
+  those require provider credentials.
 - Pending: GitHub Actions has not run because no destination repository was
   provided. The candidate is not tagged or pushed; publication still requires
   the destination URL and explicit authorization.
