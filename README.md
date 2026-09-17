@@ -127,6 +127,7 @@ frontend/      React, Vite, and Nginx frontend
 infra/         Elasticsearch image and database initialization scripts
 docs/          Architecture and project documentation
 .github/       CI and contribution templates
+MERGE_PLAN.md  Monorepo merge and release validation plan
 ```
 
 ## Troubleshooting
