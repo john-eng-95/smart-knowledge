@@ -15,18 +15,24 @@ import { ChunkHit } from '../pipeline/types/pipeline.types';
 import { ChatSessionService } from './chat-session.service';
 import { ChatShortMemoryService } from './chat-short-memory.service';
 import { ChatLongMemoryService } from './chat-long-memory.service';
-import { ChatQueryRewriteService } from './chat-query-rewrite.service';
+import {
+  ChatQueryRewriteService,
+  type ChatIntent,
+} from './chat-query-rewrite.service';
+import { retrieveUntilRelevant } from './agentic-retrieve';
+import { WebSearchService, type WebSearchResult } from './web-search.service';
 import { dbRowsToMessages } from './chat-memory.util';
 import type { AuthUser } from '../auth/auth-user.interface';
 import type { ChatSource } from './chat.types';
 
 export type { ChatSource } from './chat.types';
 
-const EXCERPT_LEN = 200;
-const CITATION_RE = /\[(\d+)\]/g;
+const EXCERPT_LEN = 200; // Maximum citation excerpt length in characters.
+const CITATION_RE = /\[(\d+)\]/g; // Citation markers such as [1] and [2].
 
 /**
- * RAG chat: hybrid kh_chunk retrieval (keyword + vector + RRF + rerank) -> LLM response.
+ * Non-streaming Agentic RAG: route intent -> retrieve and grade -> rewrite and retry
+ * when needed -> search the web when allowed -> generate an answer.
  */
 @Injectable()
 export class AiChatService {
@@ -40,6 +46,7 @@ export class AiChatService {
     private readonly shortMemory: ChatShortMemoryService,
     private readonly longMemory: ChatLongMemoryService,
     private readonly queryRewrite: ChatQueryRewriteService,
+    private readonly webSearch: WebSearchService,
   ) {
     const apiKey =
       config.get<string>('OPENAI_API_KEY') ||
@@ -83,16 +90,33 @@ export class AiChatService {
     const history = user
       ? await this.loadWorkingHistory(user.userId, sessionId)
       : [];
-    const plan = await this.queryRewrite.rewrite(trimmed, history);
-    const [hits, memHits] = await Promise.all([
-      plan.needRetrieve
-        ? this.retrieval.retrieve(plan.query, topK, user)
-        : Promise.resolve([] as ChunkHit[]),
-      user
-        ? this.longMemory.search(user.userId, sessionId, plan.query)
-        : Promise.resolve({ user: [] as string[], session: [] as string[] }),
-    ]);
-    if (plan.needRetrieve && !hits.length) {
+    const plan = await this.queryRewrite.classify(trimmed, history);
+    const memHitsP = user
+      ? this.longMemory.search(user.userId, sessionId, plan.query)
+      : Promise.resolve({ user: [] as string[], session: [] as string[] });
+    // The non-streaming path has no tool loop, but uses the same retrieve-grade-rewrite flow.
+    let hits = [] as ChunkHit[];
+    let kbInsufficient = false;
+    let searchQuery = plan.query || trimmed;
+    if (plan.allowRetrieve) {
+      const retrieved = await retrieveUntilRelevant({
+        question: trimmed,
+        query: plan.query,
+        topK,
+        user,
+        retrieval: this.retrieval,
+        rewrite: this.queryRewrite,
+      });
+      hits = retrieved.hits;
+      kbInsufficient = !retrieved.eval.ok;
+      searchQuery = retrieved.usedQuery || searchQuery;
+    }
+    const web =
+      plan.allowWeb && (!plan.allowRetrieve || kbInsufficient)
+        ? await this.webSearch.search(searchQuery)
+        : undefined;
+    const memHits = await memHitsP;
+    if (plan.intent === 'kb' && kbInsufficient) {
       const empty = {
         answer: 'No relevant content was found in the knowledge base.',
         sources: [] as ChatSource[],
@@ -131,18 +155,15 @@ export class AiChatService {
     }
 
     const memoryMsg = this.longMemory.buildSystemMessage(memHits);
-    const userTurn = hits.length
-      ? `Retrieved sources:\n${this.buildContext(hits)}\n\nUser question: ${trimmed}`
-      : `User question: ${trimmed}`;
+    const parts: string[] = [];
+    if (hits.length)
+      parts.push(`Knowledge base sources:\n${this.buildContext(hits)}`);
+    if (web) parts.push(`Web search results:\n${this.buildWebContext(web)}`);
+    parts.push(`User question: ${trimmed}`);
+    const userTurn = parts.join('\n\n');
     const response = await this.llm.invoke([
       new SystemMessage(
-        'You are an enterprise knowledge base assistant. When retrieved sources are available, answer only from those sources. ' +
-          'Use conversation history and user background from memory, but treat sources from this turn as authoritative for policies and procedures; never replace documents with memory. ' +
-          'When no sources are available, you may respond to greetings or general conversation, but do not invent policies. ' +
-          'If the sources are insufficient to answer a policy question, clearly say you do not know and do not fabricate details. ' +
-          'Every statement based on a source must end with its source number, such as [1] or [2]. ' +
-          'Source numbers must match the source list; do not cite unused numbers or invent document titles or links. ' +
-          'Keep answers concise and use lists when helpful.',
+        this.buildSystemPrompt(plan.intent, Boolean(hits.length), web),
       ),
       ...(memoryMsg ? [memoryMsg] : []),
       ...history,
@@ -251,5 +272,42 @@ export class AiChatService {
         return `[${i + 1}] ${src.documentTitle}${heading}\n${snippet}`;
       })
       .join('\n\n');
+  }
+
+  private buildWebContext(web: WebSearchResult): string {
+    if (web.error) return web.error;
+    if (!web.items.length) return 'No results.';
+    return web.items
+      .map((hit, i) => `${i + 1}. ${hit.title}\n${hit.url}\n${hit.snippet}`)
+      .join('\n\n');
+  }
+
+  private buildSystemPrompt(
+    intent: ChatIntent,
+    hasKb: boolean,
+    web?: WebSearchResult,
+  ): string {
+    let prompt =
+      'You are an enterprise knowledge base assistant. Use conversation history and relevant user memory when answering. ' +
+      'Treat knowledge base sources from this turn as authoritative for policies and procedures; never replace documents with memory.';
+    if (hasKb) {
+      prompt +=
+        'Every statement based on a source must end with the matching source number, such as [1] or [2]. ' +
+        'Source numbers must match the provided list; do not cite unused numbers or invent document titles or links.';
+    } else if (intent === 'kb' || intent === 'kb_then_web') {
+      prompt +=
+        'No relevant knowledge base sources were found; do not invent internal policies.';
+    }
+    if (web?.items.length) {
+      prompt +=
+        'Use web results only as supplemental public information, citing their titles and links; do not present them as internal policy.';
+    }
+    if (intent === 'chitchat' || intent === 'profile') {
+      prompt +=
+        'You may answer greetings or profile questions, but do not invent company policy.';
+    }
+    prompt +=
+      'When the available information is insufficient, say that you do not know. Keep the answer concise and use lists when helpful.';
+    return prompt;
   }
 }

@@ -46,14 +46,17 @@ export class AiController {
     return this.retrieval.retrieve(dto.query.trim(), dto.topK ?? 5, user);
   }
 
-  /** RAG chat: retrieve context, generate an answer, and save it to the user's session. */
+  /** Agentic RAG chat: grade retrieval, rewrite and retry when needed, then use web search for kb_then_web. */
   @Post('ai/chat')
   @RequirePermission(PermissionCode.search)
   chat(@Body() dto: ChatDto, @CurrentUser() user: AuthUser) {
     return this.aiChat.chat(dto.content, dto.topK ?? 5, user, dto.sessionId);
   }
 
-  /** Stream LangChain Agent responses through @ai-sdk/langchain as a UI Message Stream. */
+  /**
+   * Agentic RAG streaming response.
+   * Agent loop: retrieve_knowledge -> grade -> rewrite_query -> retrieve again; use web_search only when still insufficient.
+   */
   @Post('ai/chat/stream')
   @RequirePermission(PermissionCode.search)
   streamChat(

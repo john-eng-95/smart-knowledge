@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { MouseEvent } from 'react'
+import type { MouseEvent, TouchEvent, WheelEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons'
 import { App, Button, Empty, Input, Space, Typography, message } from 'antd'
 import { aiApi } from '../api'
 import { ApiError } from '../api/client'
@@ -16,7 +16,7 @@ import {
 import type { ChatMessage, ChatSession } from '../types'
 import { formatTime } from '../utils'
 
-const CHAT_ID = 'kh-chat'
+const CHAT_ID = 'kh-chat' // Reuse one useChat stream when navigating between chat views.
 
 export default function ChatPage() {
   const navigate = useNavigate()
@@ -29,7 +29,13 @@ export default function ChatPage() {
   const logRef = useRef<HTMLDivElement>(null)
   const sessionIdRef = useRef(sessionId)
   const loadedSessionRef = useRef<string | undefined>(undefined)
+  /** Keep streaming output pinned to the bottom until the user scrolls away. */
   const pinBottomRef = useRef(true)
+  /** Ignore scroll events caused by programmatic scrolling. */
+  const autoScrollingRef = useRef(false)
+  const scrollRafRef = useRef<number | null>(null)
+  const touchYRef = useRef<number | null>(null)
+  const [showJump, setShowJump] = useState(false)
   sessionIdRef.current = sessionId
 
   const transport = useMemo(
@@ -110,24 +116,90 @@ export default function ChatPage() {
     }
   }, [sessionId, streaming, navigate, setMessages])
 
+  function gapToBottom(el: HTMLElement) {
+    return el.scrollHeight - el.scrollTop - el.clientHeight
+  }
+
+  function syncJumpButton() {
+    const el = logRef.current
+    const overflow = !!el && el.scrollHeight - el.clientHeight > 8
+    const next = !pinBottomRef.current && overflow
+    setShowJump((prev) => (prev === next ? prev : next))
+  }
+
+  function setPinned(next: boolean) {
+    pinBottomRef.current = next
+    if (!next && scrollRafRef.current != null) {
+      cancelAnimationFrame(scrollRafRef.current)
+      scrollRafRef.current = null
+    }
+    syncJumpButton()
+  }
+
+  function scrollToBottom() {
+    const el = logRef.current
+    if (!el || !pinBottomRef.current) return
+    autoScrollingRef.current = true
+    el.scrollTop = el.scrollHeight
+    requestAnimationFrame(() => {
+      autoScrollingRef.current = false
+    })
+  }
+
   function onLogScroll() {
+    if (autoScrollingRef.current) return
     const el = logRef.current
     if (!el) return
-    pinBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    setPinned(gapToBottom(el) < 48)
+  }
+
+  /** Scrolling up releases the bottom pin; scrolling down near the bottom restores it. */
+  function onLogWheel(e: WheelEvent<HTMLDivElement>) {
+    if (e.deltaY < 0) {
+      setPinned(false)
+      return
+    }
+    const el = logRef.current
+    if (el && gapToBottom(el) - e.deltaY < 48) setPinned(true)
+  }
+
+  function onLogTouchStart(e: TouchEvent<HTMLDivElement>) {
+    touchYRef.current = e.touches[0]?.clientY ?? null
+  }
+
+  function onLogTouchMove(e: TouchEvent<HTMLDivElement>) {
+    const y = e.touches[0]?.clientY
+    if (touchYRef.current != null && y != null && y > touchYRef.current + 6) {
+      setPinned(false)
+    }
+    touchYRef.current = y ?? null
+  }
+
+  function jumpToBottom() {
+    setPinned(true)
+    scrollToBottom()
   }
 
   useEffect(() => {
     if (!pinBottomRef.current) return
-    requestAnimationFrame(() => {
-      logRef.current?.scrollTo({ top: logRef.current.scrollHeight })
+    if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      scrollToBottom()
     })
+    return () => {
+      if (scrollRafRef.current != null) {
+        cancelAnimationFrame(scrollRafRef.current)
+        scrollRafRef.current = null
+      }
+    }
   }, [messages, status])
 
   async function send() {
     const text = input.trim()
     if (!text || busy) return
     setInput('')
-    pinBottomRef.current = true
+    setPinned(true)
     await sendMessage({ text }, { body: { sessionId } })
   }
 
@@ -216,28 +288,47 @@ export default function ChatPage() {
           Knowledge chat
         </Typography.Title>
         <Typography.Paragraph type="secondary">
-          Searches only documents you are allowed to access (public, team-shared, or authored by you). Streaming responses show retrieval, reasoning, and web search activity and are saved to the session list.
+          Searches only documents you are allowed to access (public, team-shared, or authored by you). The assistant classifies intent, grades retrieval relevance, rewrites insufficient queries, and searches the web only when allowed.
         </Typography.Paragraph>
-        <div className="kh-chat-log" ref={logRef} onScroll={onLogScroll}>
-          {messages.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Ask a question to start a conversation" />
-          ) : (
-            messages.map((m, i) => {
-              const liveAssistant =
-                streaming && m.role === 'assistant' && i === messages.length - 1
-              return (
-                <div key={m.id} className={`kh-bubble ${m.role}`}>
-                  <ChatMessageParts
-                    messageId={m.id}
-                    parts={m.parts}
-                    role={m.role}
-                    showSources={!liveAssistant}
-                  />
-                </div>
-              )
-            })
-          )}
-          {error ? <div className="kh-chat-error">{error.message}</div> : null}
+        <div className="kh-chat-log-wrap">
+          <div
+            className="kh-chat-log"
+            ref={logRef}
+            onScroll={onLogScroll}
+            onWheel={onLogWheel}
+            onTouchStart={onLogTouchStart}
+            onTouchMove={onLogTouchMove}
+          >
+            {messages.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Ask a question to start a conversation" />
+            ) : (
+              messages.map((m, i) => {
+                const liveAssistant =
+                  streaming && m.role === 'assistant' && i === messages.length - 1
+                return (
+                  <div key={m.id} className={`kh-bubble ${m.role}`}>
+                    <ChatMessageParts
+                      messageId={m.id}
+                      parts={m.parts}
+                      role={m.role}
+                      showSources={!liveAssistant}
+                    />
+                  </div>
+                )
+              })
+            )}
+            {error ? <div className="kh-chat-error">{error.message}</div> : null}
+          </div>
+          {showJump ? (
+            <Button
+              className="kh-chat-jump"
+              size="small"
+              icon={<DownOutlined />}
+              onClick={jumpToBottom}
+            >
+              Jump to bottom
+            </Button>
+          ) : null}
         </div>
         <Space.Compact style={{ width: '100%' }}>
           <Input
