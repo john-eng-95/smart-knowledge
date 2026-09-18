@@ -17,6 +17,10 @@
     "test": "pnpm --filter knowledge-hub-backend run test && pnpm --filter knowledge-hub-frontend run test",
     "test:e2e": "pnpm --filter knowledge-hub-backend run test:e2e",
     "build": "pnpm --filter knowledge-hub-backend run build && pnpm --filter knowledge-hub-frontend run build",
+    "demo:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-demo.ps1",
+    "demo:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-demo.ps1",
+    "demo:start:unix": "bash scripts/start-demo.sh",
+    "demo:stop:unix": "bash scripts/stop-demo.sh",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down"
   }
