@@ -12,10 +12,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ai-sdk/react": "^4.0.96",
+    "@ai-sdk/react": "^4.0.121",
     "@ant-design/icons": "^6.3.4",
-    "ai": "^7.0.93",
-    "antd": "^6.6.2",
+    "ai": "^7.0.118",
+    "antd": "^6.6.5",
     "echarts": "^6.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -24,13 +24,13 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.6.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
-    "oxlint": "^1.79.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.2.2",
-    "vitest": "^5.0.1"
+    "oxlint": "^1.86.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
   }
 }
