@@ -21,6 +21,11 @@ import {
 } from './chat-query-rewrite.service';
 import { retrieveUntilRelevant } from './agentic-retrieve';
 import { WebSearchService, type WebSearchResult } from './web-search.service';
+import {
+  formatGraphSystemText,
+  GraphBuildService,
+} from '../pipeline/graph-build.service';
+import { accessFromUser } from '../document/document-access';
 import { dbRowsToMessages } from './chat-memory.util';
 import type { AuthUser } from '../auth/auth-user.interface';
 import type { ChatSource } from './chat.types';
@@ -31,8 +36,9 @@ const EXCERPT_LEN = 200; // Maximum citation excerpt length in characters.
 const CITATION_RE = /\[(\d+)\]/g; // Citation markers such as [1] and [2].
 
 /**
- * Non-streaming Agentic RAG: route intent -> retrieve and grade -> rewrite and retry
- * when needed -> search the web when allowed -> generate an answer.
+ * Non-streaming Agentic RAG: route intent -> retrieve the knowledge base and graph in
+ * parallel (rewrite and retry when insufficient) -> search the web when allowed -> generate
+ * an answer.
  */
 @Injectable()
 export class AiChatService {
@@ -47,6 +53,7 @@ export class AiChatService {
     private readonly longMemory: ChatLongMemoryService,
     private readonly queryRewrite: ChatQueryRewriteService,
     private readonly webSearch: WebSearchService,
+    private readonly graph: GraphBuildService,
   ) {
     const apiKey =
       config.get<string>('OPENAI_API_KEY') ||
@@ -94,29 +101,41 @@ export class AiChatService {
     const memHitsP = user
       ? this.longMemory.search(user.userId, sessionId, plan.query)
       : Promise.resolve({ user: [] as string[], session: [] as string[] });
-    // The non-streaming path has no tool loop, but uses the same retrieve-grade-rewrite flow.
+    // The graph sits on the same layer as the knowledge base: once the intent is fixed,
+    // retrieve both in parallel rather than racing with classify.
+    const access = user ? accessFromUser(user) : undefined;
+    const kbP = plan.allowRetrieve
+      ? retrieveUntilRelevant({
+          question: trimmed,
+          query: plan.query,
+          topK,
+          user,
+          retrieval: this.retrieval,
+          rewrite: this.queryRewrite,
+        })
+      : Promise.resolve(undefined);
+    const graphP =
+      plan.allowGraph && user && access && plan.graphQueries.length
+        ? this.graph.retrieveForChat(plan.graphQueries, 8, access)
+        : Promise.resolve(undefined);
+    const [retrieved, graphHit] = await Promise.all([kbP, graphP]);
     let hits = [] as ChunkHit[];
     let kbInsufficient = false;
     let searchQuery = plan.query || trimmed;
-    if (plan.allowRetrieve) {
-      const retrieved = await retrieveUntilRelevant({
-        question: trimmed,
-        query: plan.query,
-        topK,
-        user,
-        retrieval: this.retrieval,
-        rewrite: this.queryRewrite,
-      });
+    if (retrieved) {
       hits = retrieved.hits;
       kbInsufficient = !retrieved.eval.ok;
       searchQuery = retrieved.usedQuery || searchQuery;
     }
+    const hasGraph = Boolean(
+      graphHit?.entities.length || graphHit?.relations.length,
+    );
     const web =
       plan.allowWeb && (!plan.allowRetrieve || kbInsufficient)
         ? await this.webSearch.search(searchQuery)
         : undefined;
     const memHits = await memHitsP;
-    if (plan.intent === 'kb' && kbInsufficient) {
+    if (plan.intent === 'kb' && kbInsufficient && !hasGraph) {
       const empty = {
         answer: 'No relevant content was found in the knowledge base.',
         sources: [] as ChatSource[],
@@ -155,6 +174,7 @@ export class AiChatService {
     }
 
     const memoryMsg = this.longMemory.buildSystemMessage(memHits);
+    const graphMsg = graphHit ? formatGraphSystemText(graphHit) : '';
     const parts: string[] = [];
     if (hits.length)
       parts.push(`Knowledge base sources:\n${this.buildContext(hits)}`);
@@ -166,6 +186,7 @@ export class AiChatService {
         this.buildSystemPrompt(plan.intent, Boolean(hits.length), web),
       ),
       ...(memoryMsg ? [memoryMsg] : []),
+      ...(graphMsg ? [new SystemMessage(graphMsg)] : []),
       ...history,
       new HumanMessage(userTurn),
     ]);

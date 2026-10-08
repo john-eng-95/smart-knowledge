@@ -33,10 +33,14 @@ function categoryIndex(node: GraphViewNode) {
   return 1
 }
 
-function symbolSize(node: GraphViewNode, degree: number) {
-  if (node.kind === 'document') return 32
-  if (node.kind === 'tag') return 16
-  return 18 + Math.min(degree, 8)
+function symbolSize(node: GraphViewNode, degree: number, scale = 1) {
+  if (node.kind === 'document') return Math.round(32 * scale)
+  if (node.kind === 'tag') return Math.round(16 * scale)
+  return Math.round((18 + Math.min(degree, 8)) * scale)
+}
+
+function isChatCanvas(height: number) {
+  return height > 0 && height < 560
 }
 
 function shortName(name: string) {
@@ -90,7 +94,18 @@ function bindHandle(chartRef: Props['chartRef'], chart: ECharts) {
   }
 }
 
-function buildOption(nodes: GraphViewNode[], edges: GraphViewEdge[]): EChartsOption {
+function graphDataKey(nodes: GraphViewNode[], edges: GraphViewEdge[]) {
+  return [
+    nodes.map((node) => node.id).join('\0'),
+    edges.map((edge) => `${edge.source}\t${edge.target}\t${edge.kind}`).join('\0'),
+  ].join('|')
+}
+
+function buildOption(
+  nodes: GraphViewNode[],
+  edges: GraphViewEdge[],
+  compact: boolean,
+): EChartsOption {
   const degree = new Map<string, number>()
   for (const edge of edges) {
     degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1)
@@ -98,6 +113,9 @@ function buildOption(nodes: GraphViewNode[], edges: GraphViewEdge[]): EChartsOpt
   }
 
   return {
+    animation: false,
+    animationDuration: 0,
+    animationDurationUpdate: 0,
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item', // Show tooltips for hovered nodes and edges, not axes.
@@ -125,24 +143,24 @@ function buildOption(nodes: GraphViewNode[], edges: GraphViewEdge[]): EChartsOpt
         roam: true, // Allow wheel zooming and canvas panning.
         roamTrigger: 'global', // Allow panning from empty canvas space.
         draggable: true, // Allow nodes to be dragged.
-        zoom: 1, // Initial zoom level.
+        zoom: compact ? 1.35 : 1, // Initial zoom level.
         scaleLimit: { min: 0.25, max: 4 }, // Zoom limits.
-        left: 40,
-        right: 40,
-        top: 24,
-        bottom: 48, // Leave room for the legend and zoom controls.
+        left: compact ? 20 : 40,
+        right: compact ? 20 : 40,
+        top: compact ? 20 : 24,
+        bottom: compact ? 32 : 48, // Leave room for the legend and zoom controls.
         categories: [...CATEGORIES], // Legend categories determine node colors.
         data: nodes.map((node) => ({
           id: node.id,
           name: node.name,
           category: categoryIndex(node),
-          symbolSize: symbolSize(node, degree.get(node.id) ?? 1), // Node size.
+          symbolSize: symbolSize(node, degree.get(node.id) ?? 1, compact ? 1.28 : 1), // Node size.
           label: {
             show: true,
             position: 'bottom' as const,
             distance: 8, // Gap between labels and nodes.
             color: '#434343',
-            fontSize: node.kind === 'document' ? 12 : 11,
+            fontSize: node.kind === 'document' ? (compact ? 13 : 12) : compact ? 12 : 11,
             fontWeight: node.kind === 'document' ? 600 : 400,
             formatter: () => shortName(node.name),
           },
@@ -154,13 +172,22 @@ function buildOption(nodes: GraphViewNode[], edges: GraphViewEdge[]): EChartsOpt
           silent: true, // Keep edges from intercepting clicks or hover highlights.
           lineStyle: edgeLineStyle(edge.kind),
         })),
-        force: {
-          repulsion: 160, // Node repulsion; higher values spread nodes farther apart.
-          gravity: 0.1, // Pull nodes toward the center.
-          edgeLength: 70, // Ideal edge length.
-          friction: 0.5, // Damping; higher values settle faster.
-          layoutAnimation: false, // Disable entry animation for large graphs.
-        },
+        // Keep layoutAnimation on: disabling it stacks nodes at the origin and only the arrows move.
+        force: compact
+          ? {
+              repulsion: 240,
+              gravity: 0.05,
+              edgeLength: 110,
+              friction: 0.72,
+              layoutAnimation: true,
+            }
+          : {
+              repulsion: 160, // Node repulsion; higher values spread nodes farther apart.
+              gravity: 0.12, // Pull nodes toward the center.
+              edgeLength: 70, // Ideal edge length.
+              friction: 0.68, // Damping; higher values settle faster.
+              layoutAnimation: true,
+            },
         labelLayout: { hideOverlap: true, moveOverlap: 'shiftY' }, // Hide or vertically shift overlapping labels.
         lineStyle: { opacity: 0.9 },
         emphasis: {
@@ -185,49 +212,83 @@ function buildOption(nodes: GraphViewNode[], edges: GraphViewEdge[]): EChartsOpt
 
 export default function ForceGraph({ nodes, edges, onNodeClick, chartRef }: Props) {
   const elRef = useRef<HTMLDivElement>(null)
+  const chartInnerRef = useRef<ECharts | null>(null)
   const clickRef = useRef(onNodeClick)
   const nodesRef = useRef(nodes)
+  const edgesRef = useRef(edges)
   clickRef.current = onNodeClick
   nodesRef.current = nodes
+  edgesRef.current = edges
+  const dataKey = graphDataKey(nodes, edges)
 
   useEffect(() => {
     const el = elRef.current
     if (!el) return
 
-    let chart: ECharts | null = null
     let disposed = false
     let lastSize = { w: 0, h: 0 }
 
-    const render = () => {
-      if (disposed || el.clientWidth < 80 || el.clientHeight < 80) return
-      const sizeChanged = el.clientWidth !== lastSize.w || el.clientHeight !== lastSize.h
-      lastSize = { w: el.clientWidth, h: el.clientHeight }
-      if (!chart) {
-        chart = echarts.init(el)
-        chart.on('click', (params) => {
-          if (params.dataType !== 'node') return
-          const id = String((params.data as { id?: string }).id ?? '')
-          const node = nodesRef.current.find((n) => n.id === id)
-          if (node) clickRef.current?.(node)
-        })
-        bindHandle(chartRef, chart)
-        chart.setOption(buildOption(nodes, edges), { notMerge: true })
-        return
-      }
-      if (sizeChanged) chart.resize()
+    const applyOption = (chart: ECharts) => {
+      chart.setOption(
+        buildOption(nodesRef.current, edgesRef.current, isChatCanvas(el.clientHeight)),
+        { notMerge: true },
+      )
     }
 
-    render()
-    const ro = new ResizeObserver(render)
-    ro.observe(el)
+    const mount = () => {
+      if (disposed || chartInnerRef.current) return
+      if (el.clientWidth < 80 || el.clientHeight < 80) return
+      const chart = echarts.init(el)
+      chartInnerRef.current = chart
+      lastSize = { w: el.clientWidth, h: el.clientHeight }
+      chart.on('click', (params) => {
+        if (params.dataType !== 'node') return
+        const id = String((params.data as { id?: string }).id ?? '')
+        const node = nodesRef.current.find((n) => n.id === id)
+        if (node) clickRef.current?.(node)
+      })
+      bindHandle(chartRef, chart)
+      applyOption(chart)
+    }
 
+    const onResize = () => {
+      if (disposed) return
+      if (!chartInnerRef.current) {
+        mount()
+        return
+      }
+      const w = el.clientWidth
+      const h = el.clientHeight
+      if (w === lastSize.w && h === lastSize.h) return
+      lastSize = { w, h }
+      chartInnerRef.current.resize()
+    }
+
+    mount()
+    const ro = new ResizeObserver(onResize)
+    ro.observe(el)
     return () => {
       disposed = true
       ro.disconnect()
-      chart?.dispose()
+      chartInnerRef.current?.dispose()
+      chartInnerRef.current = null
       if (chartRef) chartRef.current = null
     }
-  }, [chartRef, nodes, edges])
+  }, [chartRef])
+
+  useEffect(() => {
+    const chart = chartInnerRef.current
+    if (!chart) return
+    const el = elRef.current
+    chart.setOption(
+      buildOption(
+        nodesRef.current,
+        edgesRef.current,
+        isChatCanvas(el?.clientHeight ?? 0),
+      ),
+      { notMerge: true },
+    )
+  }, [dataKey])
 
   return <div ref={elRef} className="kh-force-wrap" />
 }

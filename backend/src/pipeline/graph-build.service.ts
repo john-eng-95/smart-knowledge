@@ -16,6 +16,104 @@ import {
   type DocumentAccessScope,
 } from '../document/document-access';
 
+/** Graph hit for conversational RAG: entities + relation types + source documents. */
+export type GraphChatHit = {
+  query: string;
+  entities: Array<{
+    name: string;
+    type: string | null;
+    description: string | null;
+  }>;
+  relations: Array<{ source: string; relation: string; target: string }>;
+  documents: Array<{ documentId: string; title: string }>;
+};
+
+/** Graph context shown to the model: relations and sources only, never treated as the policy text itself. */
+export function formatGraphContext(hit: GraphChatHit): string {
+  if (!hit.entities.length && !hit.relations.length) return '';
+  const lines: string[] = [];
+  if (hit.relations.length) {
+    lines.push('Relations:');
+    for (const rel of hit.relations) {
+      lines.push(`- ${rel.source} → ${rel.target} (${rel.relation})`);
+    }
+  } else {
+    lines.push(
+      'Entities: ' + hit.entities.map((entity) => entity.name).join(', '),
+    );
+  }
+  if (hit.documents.length) {
+    const titles = hit.documents.map((doc) => doc.title).filter(Boolean);
+    if (titles.length) lines.push(`Source documents: ${titles.join('; ')}`);
+  }
+  return lines.join('\n');
+}
+
+export function formatGraphSystemText(hit: GraphChatHit): string {
+  const body = formatGraphContext(hit);
+  if (!body) return '';
+  return (
+    `Knowledge graph for this turn:\n${body}\n\n` +
+    'The above only describes relations between entities and cannot be treated as the policy text; policies and procedures are governed by the knowledge base retrieval results.'
+  );
+}
+
+export function mergeGraphHits(
+  base: GraphChatHit,
+  extra: GraphChatHit,
+): GraphChatHit {
+  const names = new Set(base.entities.map((e) => e.name));
+  const entities = [...base.entities];
+  for (const entity of extra.entities) {
+    if (names.has(entity.name)) continue;
+    names.add(entity.name);
+    entities.push(entity);
+  }
+  const relKeys = new Set(
+    base.relations.map((r) => `${r.source}\t${r.relation}\t${r.target}`),
+  );
+  const relations = [...base.relations];
+  for (const rel of extra.relations) {
+    const key = `${rel.source}\t${rel.relation}\t${rel.target}`;
+    if (relKeys.has(key)) continue;
+    relKeys.add(key);
+    relations.push(rel);
+  }
+  const docIds = new Set(base.documents.map((d) => d.documentId));
+  const documents = [...base.documents];
+  for (const doc of extra.documents) {
+    if (docIds.has(doc.documentId)) continue;
+    docIds.add(doc.documentId);
+    documents.push(doc);
+  }
+  const queries = [
+    ...new Set(
+      [...base.query.split('/'), ...extra.query.split('/')]
+        .map((q) => q.trim())
+        .filter(Boolean),
+    ),
+  ];
+  return { query: queries.join(' / '), entities, relations, documents };
+}
+
+/** The model often emits "invoice reimbursement" as one item; graph matching needs short names or the nodes will not match. */
+function splitGraphKeywords(keyword: string | string[]): string[] {
+  const seen = new Set<string>();
+  const kws: string[] = [];
+  const parts = Array.isArray(keyword) ? keyword : [keyword];
+  for (const part of parts) {
+    for (const raw of String(part).split(/[\s/]+/)) {
+      const kw = raw.trim();
+      if (!kw) continue;
+      const key = kw.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      kws.push(kw);
+    }
+  }
+  return kws;
+}
+
 /**
  * KG knowledge graph builder.
  *
@@ -453,6 +551,140 @@ export class GraphBuildService implements OnModuleInit, OnModuleDestroy {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Graph search failed: ${message}`);
       return [];
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Conversational RAG: find visible entities by short entity name, then look up the relations
+   * and source documents for those entities.
+   * Only equality/prefix/suffix matching is used so "invoice" does not CONTAINS-match an entire
+   * policy title. Relations and documents are queried sequentially on one session so edges are
+   * not dropped when the session is shared concurrently.
+   */
+  async retrieveForChat(
+    keyword: string | string[],
+    limit = 8,
+    scope?: DocumentAccessScope,
+  ): Promise<GraphChatHit> {
+    const kws = splitGraphKeywords(keyword);
+    const empty: GraphChatHit = {
+      query: kws.join(' / '),
+      entities: [],
+      relations: [],
+      documents: [],
+    };
+    if (!this.driver) {
+      this.logger.warn('Skipping graph chat retrieval (Neo4j unavailable)');
+      return empty;
+    }
+    if (!kws.length) return empty;
+
+    const cap = Math.min(Math.max(limit, 1), 20);
+    const vis = neo4jAccessParams(scope);
+    const session = this.driver.session();
+    try {
+      // Find entities first: match short keywords against name/aliases by equality, prefix, or
+      // suffix (no CONTAINS, so "invoice" does not match long titles).
+      const entResult = await session.run(
+        `
+        MATCH (e:KnowledgeEntity)
+        WHERE any(kw IN $kws WHERE
+          toLower(e.name) = toLower(kw)
+          // After stripping the book-title marks from 《Travel Policy》, "travel" can be a prefix.
+          OR toLower(replace(replace(e.name, '《', ''), '》', '')) STARTS WITH toLower(kw)
+          OR toLower(e.name) ENDS WITH toLower(kw)
+          // Aliases written during extraction follow the same rules as name.
+          OR any(a IN coalesce(e.aliases, []) WHERE
+            toLower(toString(a)) = toLower(kw)
+            OR toLower(toString(a)) STARTS WITH toLower(kw)
+            OR toLower(toString(a)) ENDS WITH toLower(kw)
+          )
+        )
+        // Non-superadmin: the entity must appear in a chunk of a document visible to the user.
+        AND (
+          $unrestricted OR EXISTS {
+            MATCH (d:KnowledgeDocument)-[:HAS_CHUNK]->(:DocumentChunk)-[:MENTIONS]->(e)
+            WHERE ${neo4jDocumentAccessWhere('d')}
+          }
+        )
+        RETURN e.name AS name, e.type AS type, e.description AS description
+        // Full-name equality first, then prefix/suffix, then alias matches; within a tier prefer shorter names.
+        ORDER BY
+          CASE
+            WHEN any(kw IN $kws WHERE toLower(e.name) = toLower(kw)) THEN 0
+            WHEN any(kw IN $kws WHERE toLower(e.name) STARTS WITH toLower(kw)
+              OR toLower(e.name) ENDS WITH toLower(kw)) THEN 1
+            ELSE 2
+          END,
+          size(e.name)
+        LIMIT $limit
+        `,
+        { kws, limit: neo4j.int(cap), ...vis },
+      );
+      const entities = entResult.records.map((record) => ({
+        name: record.get('name') as string,
+        type: (record.get('type') as string) ?? null,
+        description: (record.get('description') as string) ?? null,
+      }));
+      const names = entities.map((e) => e.name);
+      if (!names.length) {
+        this.logger.log(
+          `Graph chat retrieval found no entities: kws=${kws.join('/')}`,
+        );
+        return empty;
+      }
+
+      // Take only edges between the entities matched this round; do not expand to other graph nodes.
+      const relResult = await session.run(
+        `
+        MATCH (a:KnowledgeEntity)-[r:RELATED_TO]->(b:KnowledgeEntity)
+        WHERE a.name IN $names AND b.name IN $names
+        // When the edge carries no concrete relation type, display "related".
+        RETURN a.name AS source,
+               coalesce(nullif(r.relation, 'RELATED_TO'), 'related') AS relation,
+               b.name AS target
+        `,
+        { names },
+      );
+      const seen = new Set<string>();
+      const relations: GraphChatHit['relations'] = [];
+      for (const record of relResult.records) {
+        const source = record.get('source') as string;
+        const relation = record.get('relation') as string;
+        const target = record.get('target') as string;
+        const key = `${source}\t${relation}\t${target}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        relations.push({ source, relation, target });
+      }
+
+      // Which documents visible to the current user these entities come from (source for the
+      // frontend/model, not the policy text itself).
+      const docResult = await session.run(
+        `
+        MATCH (d:KnowledgeDocument)-[:HAS_CHUNK]->(:DocumentChunk)-[:MENTIONS]->(e:KnowledgeEntity)
+        WHERE e.name IN $names
+          AND ($unrestricted OR ${neo4jDocumentAccessWhere('d')})
+        RETURN DISTINCT d.id AS documentId, d.title AS title
+        LIMIT 8
+        `,
+        { names, ...vis },
+      );
+      const documents = docResult.records.map((record) => ({
+        documentId: record.get('documentId') as string,
+        title: (record.get('title') as string) ?? '',
+      }));
+
+      this.logger.log(
+        `Graph chat retrieval: kws=${kws.join('/')} entities=${entities.length} rels=${relations.length}`,
+      );
+      return { query: kws.join(' / '), entities, relations, documents };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Graph chat retrieval failed: ${message}`);
+      return empty;
     } finally {
       await session.close();
     }

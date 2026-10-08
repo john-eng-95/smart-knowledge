@@ -288,7 +288,7 @@ export default function ChatPage() {
           Knowledge chat
         </Typography.Title>
         <Typography.Paragraph type="secondary">
-          Searches only documents you are allowed to access (public, team-shared, or authored by you). The assistant classifies intent, grades retrieval relevance, rewrites insufficient queries, and searches the web only when allowed.
+          Searches only documents you are allowed to access (public, team-shared, or authored by you). The assistant classifies intent, then retrieves from the knowledge base, the knowledge graph, or the web as needed, grades retrieval relevance, and rewrites insufficient queries.
         </Typography.Paragraph>
         <div className="kh-chat-log-wrap">
           <div

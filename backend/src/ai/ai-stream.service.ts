@@ -28,6 +28,12 @@ import {
 } from './chat-query-rewrite.service';
 import { retrieveAndGrade, type RetrieveEval } from './agentic-retrieve';
 import { WebSearchService } from './web-search.service';
+import {
+  formatGraphContext,
+  GraphBuildService,
+  type GraphChatHit,
+} from '../pipeline/graph-build.service';
+import { accessFromUser } from '../document/document-access';
 import { dbRowsToMessages } from './chat-memory.util';
 import type { AuthUser } from '../auth/auth-user.interface';
 import type { ChatSource } from './chat.types';
@@ -58,11 +64,15 @@ type KhUIMessage = UIMessage<
       intent: ChatRoutePlan['intent'];
       label: string;
       query: string;
+      graphQueries: string[];
       allowRetrieve: boolean;
+      allowGraph: boolean;
       allowWeb: boolean;
     };
     /** Retrieval relevance card. */
     eval: RetrieveEval;
+    /** Graph entities and relations. */
+    graph: GraphChatHit;
     session: { sessionId: string };
   }
 >;
@@ -81,6 +91,7 @@ export class AiStreamService {
     private readonly shortMemory: ChatShortMemoryService,
     private readonly longMemory: ChatLongMemoryService,
     private readonly queryRewrite: ChatQueryRewriteService,
+    private readonly graph: GraphBuildService,
   ) {
     const apiKey =
       config.get<string>('OPENAI_API_KEY') ||
@@ -109,7 +120,10 @@ export class AiStreamService {
       useResponsesApi: false,
       streamUsage: false,
       configuration: { baseURL },
-      modelKwargs: enableThinking ? { enable_thinking: true } : undefined,
+      modelKwargs: {
+        ...(enableThinking ? { enable_thinking: true } : {}),
+        parallel_tool_calls: true,
+      },
     });
     // Disable reasoning for summaries and classification so structured output is more reliable.
     this.compactLlm = new ChatOpenAI({
@@ -124,7 +138,8 @@ export class AiStreamService {
   }
 
   /**
-   * Attach tools for this turn's intent. The Agent controls the loop; each tool performs one step.
+   * Attach tools for this turn's intent. The knowledge base and the graph are both Agent tools
+   * and must be called in parallel first; rewriting and re-retrieval are scheduled by the loop.
    */
   private createTurnAgent(
     user: AuthUser,
@@ -138,6 +153,7 @@ export class AiStreamService {
     const retrieval = this.retrieval;
     const queryRewrite = this.queryRewrite;
     const search = this.webSearch;
+    const graph = this.graph;
     const logger = this.logger;
     const tools: StructuredToolInterface[] = [];
     let retrieveCount = 0;
@@ -199,7 +215,7 @@ export class AiStreamService {
           {
             name: 'retrieve_knowledge',
             description:
-              'Retrieve the enterprise knowledge base once using only documents visible to the current user, then grade relevance. Do not retry automatically. If eval.ok is false, call rewrite_query first and call this tool again with the new query. At most two retrievals per turn.',
+              'Retrieve the enterprise knowledge base once using only documents visible to the current user, then grade relevance. Do not retry automatically. On the first retrieval you must call this tool in the same parallel call as retrieve_graph. If eval.ok is false, call rewrite_query first and call this tool again with the new query. At most two retrievals per turn.',
             schema: z.object({
               query: z
                 .string()
@@ -269,6 +285,46 @@ export class AiStreamService {
       );
     }
 
+    if (plan.allowGraph) {
+      tools.push(
+        tool(
+          async (input: { query: string }) => {
+            const keywords = [
+              ...plan.graphQueries,
+              ...(input.query.trim() ? [input.query.trim()] : []),
+            ];
+            const hit = await graph.retrieveForChat(
+              keywords,
+              8,
+              accessFromUser(user),
+            );
+            writer.write({ type: 'data-graph', data: hit });
+            return {
+              query: hit.query,
+              entities: hit.entities,
+              relations: hit.relations,
+              documents: hit.documents,
+              context: formatGraphContext(hit),
+              insufficient: !hit.entities.length && !hit.relations.length,
+            };
+          },
+          {
+            name: 'retrieve_graph',
+            description:
+              'Retrieve knowledge graph entities and relations (the graph is built only from documents visible to the current user). The input must be short entity names separated by spaces or "/", for example "invoice / reimbursement"; do not pass a full sentence. On the first knowledge base retrieval you must call this tool in the same parallel call as retrieve_knowledge. The graph only describes entity relations and must not be treated as policy text. Call it again separately only when other entity names still need to be checked.',
+            schema: z.object({
+              query: z
+                .string()
+                .min(1)
+                .describe(
+                  'Short entity names separated by spaces or "/"; do not pass a full sentence.',
+                ),
+            }),
+          },
+        ),
+      );
+    }
+
     if (plan.allowWeb) {
       tools.push(
         tool(
@@ -305,7 +361,7 @@ export class AiStreamService {
           summaryPrompt:
             'Summarize the conversation concisely in the user’s language: topic, confirmed conclusions, and action items. Do not turn knowledge base policy text into memory.\n\nConversation to summarize:\n{messages}\n\nSummary:',
         }),
-        modelCallLimitMiddleware({ runLimit: 6, exitBehavior: 'end' }),
+        modelCallLimitMiddleware({ runLimit: 8, exitBehavior: 'end' }),
       ],
     });
   }
@@ -352,6 +408,11 @@ export class AiStreamService {
           type: 'data-status',
           data: { stage: 'intent', text: 'Classifying intent…' },
         });
+        const memHitsP = this.longMemory.search(
+          user.userId,
+          session.id,
+          question,
+        );
         // Route before starting the Agent so the client can render the intent card immediately.
         const plan = await this.queryRewrite.classify(question, history);
         writer.write({
@@ -360,16 +421,13 @@ export class AiStreamService {
             intent: plan.intent,
             label: plan.label,
             query: plan.query,
+            graphQueries: plan.graphQueries,
             allowRetrieve: plan.allowRetrieve,
+            allowGraph: plan.allowGraph,
             allowWeb: plan.allowWeb,
           },
         });
 
-        const memHitsP = this.longMemory.search(
-          user.userId,
-          session.id,
-          question,
-        );
         const memHits = await memHitsP;
 
         const agent = this.createTurnAgent(
@@ -391,19 +449,12 @@ export class AiStreamService {
         }
 
         const memoryMsg = this.longMemory.buildSystemMessage(memHits);
-        const humanParts = [
-          plan.allowRetrieve
-            ? `Suggested search query (the Agent may rewrite it): ${plan.query}`
-            : '',
-          `User question: ${question}`,
-        ].filter(Boolean);
-        const human = humanParts.join('\n\n');
         const langchainStream = await agent.stream(
           {
             messages: [
               ...(memoryMsg ? [memoryMsg] : []),
               ...history,
-              new HumanMessage(human),
+              new HumanMessage(question),
             ],
           },
           // messages: model tokens/reasoning; tools: retrieve/web_search calls converted to tool-* events.
@@ -554,13 +605,26 @@ function excerpt(content: string) {
   return `${text.slice(0, EXCERPT_LEN)}...`;
 }
 
-/** Agent loop: retrieve -> grade -> rewrite and retry -> search the web if still insufficient -> answer. */
+/** Agent loop: the knowledge base and the graph are parallel tools called in the same step; rewrite and retry when the evaluation is insufficient; search the web only if still insufficient. */
 function systemForPlan(plan: ChatRoutePlan) {
   let prompt =
     'You are an enterprise knowledge base assistant. Follow the Agentic RAG loop without skipping steps. ' +
     'Use conversation history and relevant user memory, but treat sources retrieved in this turn as authoritative for policies and procedures. ' +
     `Turn intent: ${plan.label}.`;
-  if (plan.allowRetrieve) {
+  if (plan.allowRetrieve && plan.allowGraph) {
+    const graphHint = plan.graphQueries.length
+      ? plan.graphQueries.join(' / ')
+      : 'short entity names extracted from the question';
+    prompt +=
+      `Suggested knowledge base query: "${plan.query}"; suggested graph query: "${graphHint}". ` +
+      'The first step must call retrieve_knowledge and retrieve_graph in parallel in the same reply, and both must be called: ' +
+      'do not query the knowledge base before deciding whether to query the graph, do not call only one of them, and do not wait for one to return before calling the other. ' +
+      'The retrieve_graph query must be short entity names (space or / separated), never a full sentence. ' +
+      'Loop: 1) retrieve in parallel; 2) when the knowledge base eval.ok is true, answer from the document context and cite [n], and treat the graph as entity relations only, never as policy text; ' +
+      '3) when insufficient, call rewrite_query first, then call retrieve_knowledge again with the new query (at most twice), and call retrieve_graph again only when the entity names changed; ' +
+      '4) consider web_search only after two insufficient retrievals. Do not retrieve or rewrite after eval.ok is true, and never make a third retrieve_knowledge call. ' +
+      'Do not invent relations when the graph is empty. Do not replace documents with memory.';
+  } else if (plan.allowRetrieve) {
     prompt +=
       `Suggested query: "${plan.query}". Rewrite it when a more precise query is needed. ` +
       'Loop: 1) call retrieve_knowledge; 2) when eval.ok is true, answer from context and cite [n]; ' +
@@ -569,6 +633,9 @@ function systemForPlan(plan: ChatRoutePlan) {
       'Do not replace documents with memory.';
   } else {
     prompt += 'Do not call retrieve_knowledge or rewrite_query.';
+  }
+  if (!plan.allowGraph) {
+    prompt += 'Do not call retrieve_graph.';
   }
   if (plan.intent === 'chitchat') {
     prompt += 'This is casual conversation; answer directly without tools.';

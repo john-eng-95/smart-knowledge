@@ -43,10 +43,14 @@ export type ChatIntent = (typeof CHAT_INTENTS)[number];
 export type ChatRoutePlan = {
   intent: ChatIntent;
   label: string;
-  /** Standalone query with references resolved, for RAG and web search. */
+  /** Standalone query with references resolved, for the knowledge base and web search; it may be a full sentence. */
   query: string;
+  /** Short entity names for the graph, such as invoice, reimbursement, or travel; a full sentence cannot be matched against the graph. */
+  graphQueries: string[];
   /** Attach retrieve_knowledge only for kb and kb_then_web. */
   allowRetrieve: boolean;
+  /** Same as allowRetrieve: only query the graph on turns that hit the knowledge base. */
+  allowGraph: boolean;
   /** Attach web_search only for web and kb_then_web. */
   allowWeb: boolean;
 };
@@ -90,6 +94,12 @@ const routeSchema = z.object({
     .string()
     .describe(
       'A standalone short search query in the user’s language with references resolved. Keep chitchat and profile queries unchanged when appropriate.',
+    ),
+  graph_queries: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Short graph entity names: 2 to 6 items, each 2 to 8 characters. Must be an empty array for chitchat, profile, and web-only turns.',
     ),
 });
 
@@ -135,9 +145,9 @@ const RETRY_REWRITE_PROMPT =
   '- Do not invent clause numbers or proper nouns.\n' +
   '- Return one query in the user’s language, preferably under 40 words.';
 
-/** Classify intent and produce a suggested query before starting the Agent. */
+/** Classify intent, produce a document query, and produce short graph entity names before starting the Agent. */
 const ROUTE_PROMPT =
-  'You route enterprise knowledge assistant requests and rewrite queries for retrieval. Determine the intent of this turn and produce a short searchable query.\n' +
+  'You route enterprise knowledge assistant requests and rewrite queries for retrieval. Determine the intent of this turn, produce a document search query, and produce the short entity names the graph needs.\n' +
   '\n' +
   '## intent\n' +
   '- chitchat: greetings, thanks, or unrelated conversation\n' +
@@ -152,10 +162,17 @@ const ROUTE_PROMPT =
   '- User memory must not change the intent of the current question\n' +
   '\n' +
   '## standalone_query\n' +
-  '- Resolve references such as “this”, “who is responsible”, and “what should I do”, and restore omitted topics.\n' +
+  '- Used for knowledge base full-text search; it may be a full sentence. Resolve references such as “this”, “who is responsible”, and “what should I do”, and keep it under 40 words where possible.\n' +
   '- Do not invent proper nouns or clause numbers that are not in the conversation.\n' +
   '- Do not repeat policy text already stated by the assistant.\n' +
   '- Keep chitchat and profile queries unchanged.\n' +
+  '\n' +
+  '## graph_queries\n' +
+  '- Only fill this in for kb and kb_then_web; other intents must use an empty array.\n' +
+  '- Short entity names of 2 to 4 characters each (people, roles, or policy subjects); never a full sentence and never a question mark.\n' +
+  '- Always split them up: “how do I get an invoice reimbursed” -> invoice, reimbursement; “invoice reimbursement process and requirements” -> invoice, reimbursement\n' +
+  '- You may add one short name from the same domain (reimbursement may include travel).\n' +
+  '- Never use: process, requirement, policy, how, what, what is\n' +
   '- Return only the structured result.';
 
 /**
@@ -238,9 +255,9 @@ export class ChatQueryRewriteService {
         ]),
       );
       const query = result.standalone_query.trim() || question;
-      const plan = this.toPlan(result.intent, query);
+      const plan = this.toPlan(result.intent, query, result.graph_queries);
       this.logger.log(
-        `Intent: ${plan.intent} query=${plan.query.slice(0, 80)}`,
+        `Intent: ${plan.intent} query=${plan.query.slice(0, 80)} graph=${plan.graphQueries.join('/') || '-'}`,
       );
       return plan;
     } catch (error) {
@@ -344,13 +361,21 @@ export class ChatQueryRewriteService {
   }
 
   /** Map intent to tool availability. Classification failure falls back to kb. */
-  private toPlan(intent: ChatIntent, query: string): ChatRoutePlan {
+  private toPlan(
+    intent: ChatIntent,
+    query: string,
+    graphQueries?: string[],
+  ): ChatRoutePlan {
     const kb = intent === 'kb' || intent === 'kb_then_web';
     return {
       intent,
       label: INTENT_LABEL[intent],
       query,
+      graphQueries: kb
+        ? (graphQueries ?? []).map((q) => q.trim()).filter(Boolean)
+        : [],
       allowRetrieve: kb,
+      allowGraph: kb,
       allowWeb: intent === 'web' || intent === 'kb_then_web',
     };
   }

@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { getToolName, isToolUIPart } from 'ai'
 import type { UIMessage } from 'ai'
 import { AnswerMarkdown, SourceCiteList } from './SourceCiteList'
-import type { ChatSource } from '../types'
+import ForceGraph from './ForceGraph'
+import type { ChatSource, GraphViewEdge, GraphViewNode } from '../types'
 
 export type RetrieveHit = {
   index: number
@@ -19,13 +20,24 @@ export type ChatIntent =
   | 'web' // Web search.
   | 'kb_then_web' // Knowledge base first, then web if needed.
 
-/** data-intent: turn routing and the enabled knowledge sources. */
+/** data-intent: turn routing and the enabled knowledge sources (knowledge base, graph, web). */
 export type IntentPart = {
   intent: ChatIntent
   label: string
   query: string
+  graphQueries?: string[]
   allowRetrieve: boolean
+  allowGraph: boolean
   allowWeb: boolean
+}
+
+/** data-graph: the process trace card reuses the same force-directed graph as the graph page. */
+export type GraphHit = {
+  query?: string
+  entities?: Array<{ name: string; type?: string | null; description?: string | null }>
+  relations?: Array<{ source: string; relation: string; target: string }>
+  documents?: Array<{ documentId: string; title: string }>
+  error?: string
 }
 
 /** data-eval: ok means the sources are relevant, not merely non-empty. */
@@ -54,6 +66,7 @@ export type KhUIMessage = UIMessage<
     retrieve: { query: string; items: RetrieveHit[] }
     intent: IntentPart
     eval: EvalPart
+    graph: GraphHit
     session: { sessionId: string }
   }
 >
@@ -186,10 +199,15 @@ export function ChatMessageParts({
   const hasRewrite = parts.some(
     (part) => isToolUIPart(part) && getToolName(part) === 'rewrite_query',
   )
+  const hasGraph = parts.some(
+    (part) =>
+      part.type === 'data-graph' ||
+      (isToolUIPart(part) && getToolName(part) === 'retrieve_graph'),
+  )
 
   return (
     <>
-      {renderProcessParts(parts, hasRetrieve, hasIntent, hasRewrite)}
+      {renderProcessParts(parts, hasRetrieve, hasIntent, hasRewrite, hasGraph)}
       {texts.map((part, i) =>
         part.type === 'text' ? (
           <div key={`text-${i}`} className="kh-bubble-md">
@@ -214,12 +232,13 @@ export function ChatMessageParts({
   )
 }
 
-/** Process trace before the answer: intent -> retrieve -> grade -> rewrite -> retry -> web -> think. */
+/** Process trace before the answer: intent -> think -> knowledge base/graph tools -> grade -> rewrite -> web. */
 function renderProcessParts(
   parts: KhUIMessage['parts'],
   hasRetrieve: boolean,
   hasIntent: boolean,
   hasRewrite: boolean,
+  hasGraph: boolean,
 ) {
   const nodes: ReactNode[] = []
   let reasoningBuf: string[] = []
@@ -265,6 +284,7 @@ function renderProcessParts(
       if (part.data.stage === 'retrieve' && hasRetrieve) return
       if (part.data.stage === 'intent' && hasIntent) return
       if (part.data.stage === 'rewrite' && hasRewrite) return
+      if (part.data.stage === 'graph' && hasGraph) return
       nodes.push(
         <TraceItem key={i} kind="status" tone="pending">
           <div className="kh-trace-status">{part.data.text}</div>
@@ -283,6 +303,16 @@ function renderProcessParts(
       return
     }
 
+    if (part.type === 'data-graph') {
+      // The agent's retrieve_graph tool card already renders the force-directed graph,
+      // so skip this card to avoid showing the same graph twice.
+      if (parts.some((p) => isToolUIPart(p) && getToolName(p) === 'retrieve_graph')) {
+        return
+      }
+      nodes.push(<GraphCard key={i} data={part.data} />)
+      return
+    }
+
     if (part.type === 'data-retrieve') {
       nodes.push(<RetrieveCard key={i} query={part.data.query} items={part.data.items} />)
       return
@@ -290,6 +320,11 @@ function renderProcessParts(
 
     if (isToolUIPart(part) && getToolName(part) === 'retrieve_knowledge') {
       nodes.push(<RetrieveToolCard key={i} part={part} />)
+      return
+    }
+
+    if (isToolUIPart(part) && getToolName(part) === 'retrieve_graph') {
+      nodes.push(<GraphToolCard key={i} part={part} />)
       return
     }
 
@@ -355,10 +390,17 @@ function IntentCard({ data }: { data: IntentPart }) {
               <dd>{data.query}</dd>
             </div>
           ) : null}
+          {data.graphQueries?.length ? (
+            <div>
+              <dt>Graph queries</dt>
+              <dd>{data.graphQueries.join(' / ')}</dd>
+            </div>
+          ) : null}
           <div>
             <dt>Sources</dt>
             <dd>
               <span className={data.allowRetrieve ? 'on' : 'off'}>Knowledge base</span>
+              <span className={data.allowGraph ? 'on' : 'off'}>Knowledge graph</span>
               <span className={data.allowWeb ? 'on' : 'off'}>Web</span>
             </dd>
           </div>
@@ -366,6 +408,143 @@ function IntentCard({ data }: { data: IntentPart }) {
       </div>
     </TraceItem>
   )
+}
+
+function graphHitToView(data: GraphHit): {
+  nodes: GraphViewNode[]
+  edges: GraphViewEdge[]
+} {
+  const nodes: GraphViewNode[] = []
+  const seen = new Set<string>()
+  for (const entity of data.entities ?? []) {
+    const id = `entity:${entity.name}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    nodes.push({
+      id,
+      name: entity.name,
+      kind: 'entity',
+      type: entity.type,
+      description: entity.description,
+    })
+  }
+  for (const doc of data.documents ?? []) {
+    const id = `doc:${doc.documentId}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    nodes.push({
+      id,
+      name: doc.title || doc.documentId,
+      kind: 'document',
+      documentId: doc.documentId,
+    })
+  }
+  const edges: GraphViewEdge[] = []
+  const edgeKeys = new Set<string>()
+  const pushEdge = (edge: GraphViewEdge) => {
+    const key = `${edge.source}\t${edge.relation}\t${edge.target}`
+    if (edgeKeys.has(key)) return
+    if (!seen.has(edge.source) || !seen.has(edge.target)) return
+    edgeKeys.add(key)
+    edges.push(edge)
+  }
+  for (const rel of data.relations ?? []) {
+    pushEdge({
+      source: `entity:${rel.source}`,
+      target: `entity:${rel.target}`,
+      relation: rel.relation,
+      kind: 'related',
+    })
+  }
+  const entityIds = nodes.filter((n) => n.kind === 'entity').map((n) => n.id)
+  const docIds = nodes.filter((n) => n.kind === 'document').map((n) => n.id)
+  const mentionAll = docIds.length * entityIds.length <= 16
+  for (const docId of docIds) {
+    const targets = mentionAll ? entityIds : entityIds.slice(0, 1)
+    for (const entityId of targets) {
+      pushEdge({
+        source: docId,
+        target: entityId,
+        relation: 'mentions',
+        kind: 'mentions',
+      })
+    }
+  }
+  return { nodes, edges }
+}
+
+function GraphCard({ data, pending }: { data: GraphHit; pending?: boolean }) {
+  const entities = data.entities ?? []
+  const relations = data.relations ?? []
+  const empty = !entities.length && !relations.length
+  const failed = Boolean(data.error) || (!pending && empty)
+  const tone = pending ? 'pending' : failed ? 'failed' : 'ok'
+  const label = pending
+    ? 'Searching the knowledge graph'
+    : data.error
+      ? 'Graph search failed'
+      : empty
+        ? 'No matching entities in the graph'
+        : 'Entity relations retrieved'
+  const view = useMemo(() => graphHitToView(data), [data])
+
+  return (
+    <TraceItem kind="graph" tone={tone}>
+      <details className="kh-sheet" open>
+        <summary className="kh-panel-head">
+          <span className="kh-panel-type">Knowledge graph</span>
+          <span className="kh-panel-title">{label}</span>
+          {data.query ? <span className="kh-panel-sub">{data.query}</span> : null}
+          {!pending && entities.length ? (
+            <b className="kh-panel-n">{entities.length}</b>
+          ) : null}
+        </summary>
+        {data.error ? (
+          <div className="kh-step-err">{data.error}</div>
+        ) : !pending && !empty ? (
+          <div className="kh-trace-graph-canvas">
+            <ForceGraph nodes={view.nodes} edges={view.edges} />
+          </div>
+        ) : null}
+      </details>
+    </TraceItem>
+  )
+}
+
+function GraphToolCard({
+  part,
+}: {
+  part: {
+    state: string
+    input?: unknown
+    output?: unknown
+    errorText?: string
+  }
+}) {
+  const input = asRecord(part.input)
+  const pending = part.state === 'input-streaming' || part.state === 'input-available'
+  const rec = parseToolPayload(part.output)
+  const hit: GraphHit = {
+    query:
+      (typeof rec?.query === 'string' && rec.query) ||
+      (typeof input.query === 'string' ? input.query : ''),
+    entities: Array.isArray(rec?.entities)
+      ? (rec.entities as GraphHit['entities'])
+      : [],
+    relations: Array.isArray(rec?.relations)
+      ? (rec.relations as GraphHit['relations'])
+      : [],
+    documents: Array.isArray(rec?.documents)
+      ? (rec.documents as GraphHit['documents'])
+      : [],
+    error:
+      typeof rec?.error === 'string'
+        ? rec.error
+        : part.state === 'output-error'
+          ? part.errorText || 'Graph search failed'
+          : undefined,
+  }
+  return <GraphCard data={hit} pending={pending} />
 }
 
 function EvalCard({ data }: { data: EvalPart }) {
